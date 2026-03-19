@@ -1,0 +1,397 @@
+name: JMeter Performance Tests
+
+# ─────────────────────────────────────────────
+# TRIGGERS
+# ─────────────────────────────────────────────
+on:
+  push:
+    branches: [main]           # Run on every push to main
+  pull_request:
+    branches: [main]           # Run on PRs targeting main
+  schedule:
+    - cron: "0 2 * * *"        # Run nightly at 2:00 AM UTC
+  workflow_dispatch:            # Allow manual trigger from GitHub UI
+
+# ─────────────────────────────────────────────
+# GLOBAL ENV VARIABLES
+# ─────────────────────────────────────────────
+env:
+  JMETER_VERSION: "5.6.3"
+  JAVA_VERSION: "17"
+  TEST_PLAN: "Test_Plan_Updated.jmx"
+  RESULTS_DIR: "results"
+  REPORT_DIR: "results/html_report"
+  JTL_FILE: "results/results.jtl"
+
+jobs:
+  performance-test:
+    name: Run JMeter Performance Tests
+    runs-on: ubuntu-latest
+
+    steps:
+
+      # ─────────────────────────────────────────
+      # STEP 1 — Checkout the repository
+      # ─────────────────────────────────────────
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      # ─────────────────────────────────────────
+      # STEP 2 — Set up Java (JMeter requires it)
+      # ─────────────────────────────────────────
+      - name: Set Up Java ${{ env.JAVA_VERSION }}
+        uses: actions/setup-java@v4
+        with:
+          distribution: "temurin"
+          java-version: ${{ env.JAVA_VERSION }}
+
+      # ─────────────────────────────────────────
+      # STEP 3 — Cache JMeter installation
+      # Avoids re-downloading on every run
+      # ─────────────────────────────────────────
+      - name: Cache JMeter
+        id: cache-jmeter
+        uses: actions/cache@v4
+        with:
+          path: apache-jmeter-${{ env.JMETER_VERSION }}
+          key: jmeter-${{ env.JMETER_VERSION }}
+
+      # ─────────────────────────────────────────
+      # STEP 4 — Download & install JMeter
+      # Only runs if cache miss
+      # ─────────────────────────────────────────
+      - name: Install JMeter
+        if: steps.cache-jmeter.outputs.cache-hit != 'true'
+        run: |
+          wget -q https://archive.apache.org/dist/jmeter/binaries/apache-jmeter-${{ env.JMETER_VERSION }}.tgz
+          tar -xzf apache-jmeter-${{ env.JMETER_VERSION }}.tgz
+          echo "JMeter ${{ env.JMETER_VERSION }} installed successfully"
+
+      # ─────────────────────────────────────────
+      # STEP 5 — Add JMeter to PATH
+      # ─────────────────────────────────────────
+      - name: Add JMeter to PATH
+        run: echo "$GITHUB_WORKSPACE/apache-jmeter-${{ env.JMETER_VERSION }}/bin" >> $GITHUB_PATH
+
+      # ─────────────────────────────────────────
+      # STEP 6 — Prepare results directory
+      # ─────────────────────────────────────────
+      - name: Prepare Results Directory
+        run: |
+          mkdir -p ${{ env.RESULTS_DIR }}
+          rm -rf ${{ env.REPORT_DIR }}
+
+      # ─────────────────────────────────────────
+      # STEP 7 — Run JMeter Tests (LightLoad only
+      # in CI; heavier loads run on schedule only)
+      # ─────────────────────────────────────────
+      - name: Run JMeter Performance Test
+        id: run_tests
+        run: |
+          jmeter \
+            -n \
+            -t ${{ env.TEST_PLAN }} \
+            -l ${{ env.JTL_FILE }} \
+            -e \
+            -o ${{ env.REPORT_DIR }} \
+            -Jjmeter.save.saveservice.output_format=csv \
+            -j ${{ env.RESULTS_DIR }}/jmeter.log
+        continue-on-error: true   # Don't stop — we still want the report even if tests fail
+
+      # ─────────────────────────────────────────
+      # STEP 8 — Record test outcome for Slack
+      # ─────────────────────────────────────────
+      - name: Set Test Status
+        id: test_status
+        run: |
+          if [ "${{ steps.run_tests.outcome }}" == "success" ]; then
+            echo "status=PASSED" >> $GITHUB_OUTPUT
+            echo "status_emoji=✅" >> $GITHUB_OUTPUT
+            echo "status_color=#36a64f" >> $GITHUB_OUTPUT
+          else
+            echo "status=FAILED" >> $GITHUB_OUTPUT
+            echo "status_emoji=❌" >> $GITHUB_OUTPUT
+            echo "status_color=#ff0000" >> $GITHUB_OUTPUT
+          fi
+
+      # ─────────────────────────────────────────
+      # STEP 9 — Parse JTL and compute statistics
+      # Outputs a JSON payload for Slack
+      # ─────────────────────────────────────────
+      - name: Parse JTL Results and Build Slack Payload
+        id: parse_results
+        run: |
+          python3 << 'EOF'
+          import csv
+          import json
+          import os
+          import math
+          from collections import defaultdict
+
+          jtl_file = os.environ.get("JTL_FILE", "results/results.jtl")
+          status    = os.environ.get("TEST_STATUS", "UNKNOWN")
+          color     = os.environ.get("STATUS_COLOR", "#888888")
+          emoji     = os.environ.get("STATUS_EMOJI", "⚪")
+          repo      = os.environ.get("GITHUB_REPOSITORY", "unknown/repo")
+          run_id    = os.environ.get("GITHUB_RUN_ID", "0")
+          run_num   = os.environ.get("GITHUB_RUN_NUMBER", "0")
+          actor     = os.environ.get("GITHUB_ACTOR", "unknown")
+          branch    = os.environ.get("GITHUB_REF_NAME", "unknown")
+          sha       = os.environ.get("GITHUB_SHA", "")[:7]
+          trigger   = os.environ.get("GITHUB_EVENT_NAME", "unknown")
+          report_url = f"https://github.com/{repo}/actions/runs/{run_id}"
+
+          # ── Parse the .jtl CSV ──────────────────
+          rows = []
+          try:
+              with open(jtl_file, newline="", encoding="utf-8") as f:
+                  reader = csv.DictReader(f)
+                  for row in reader:
+                      rows.append(row)
+          except FileNotFoundError:
+              rows = []
+
+          # ── Aggregate stats per label ────────────
+          label_stats = defaultdict(lambda: {
+              "count": 0, "errors": 0, "elapsed": []
+          })
+
+          for row in rows:
+              label   = row.get("label", "Unknown")
+              success = row.get("success", "true").lower() == "true"
+              try:
+                  elapsed = int(row.get("elapsed", 0))
+              except ValueError:
+                  elapsed = 0
+              label_stats[label]["count"]   += 1
+              label_stats[label]["elapsed"].append(elapsed)
+              if not success:
+                  label_stats[label]["errors"] += 1
+
+          # ── Overall totals ───────────────────────
+          total_requests  = sum(s["count"]  for s in label_stats.values())
+          total_errors    = sum(s["errors"] for s in label_stats.values())
+          all_elapsed     = [e for s in label_stats.values() for e in s["elapsed"]]
+          error_rate      = (total_errors / total_requests * 100) if total_requests else 0
+          avg_response    = (sum(all_elapsed) / len(all_elapsed)) if all_elapsed else 0
+          min_response    = min(all_elapsed) if all_elapsed else 0
+          max_response    = max(all_elapsed) if all_elapsed else 0
+
+          def percentile(data, p):
+              if not data:
+                  return 0
+              sorted_data = sorted(data)
+              idx = math.ceil(p / 100 * len(sorted_data)) - 1
+              return sorted_data[max(0, idx)]
+
+          p90 = percentile(all_elapsed, 90)
+          p95 = percentile(all_elapsed, 95)
+          p99 = percentile(all_elapsed, 99)
+
+          # Duration (first to last timestamp)
+          try:
+              timestamps = [int(r.get("timeStamp", 0)) for r in rows if r.get("timeStamp")]
+              if timestamps:
+                  duration_s = (max(timestamps) - min(timestamps)) / 1000
+                  throughput = round(total_requests / duration_s, 2) if duration_s > 0 else 0
+              else:
+                  duration_s, throughput = 0, 0
+          except Exception:
+              duration_s, throughput = 0, 0
+
+          # ── Threshold checks ─────────────────────
+          SLA_RESPONSE   = 2000   # ms
+          SLA_ERROR_RATE = 1.0    # %
+          SLA_THROUGHPUT = 500    # req/s
+
+          resp_ok  = avg_response  <= SLA_RESPONSE
+          err_ok   = error_rate    <= SLA_ERROR_RATE
+          tput_ok  = throughput    >= SLA_THROUGHPUT
+
+          def tick(ok):
+              return "✅" if ok else "❌"
+
+          # ── Per-request table rows ───────────────
+          table_rows = []
+          for label, s in sorted(label_stats.items()):
+              e_list  = s["elapsed"]
+              avg     = int(sum(e_list) / len(e_list)) if e_list else 0
+              mn      = min(e_list) if e_list else 0
+              mx      = max(e_list) if e_list else 0
+              p90_l   = percentile(e_list, 90)
+              err_pct = round(s["errors"] / s["count"] * 100, 1) if s["count"] else 0
+              pass_t  = tick(avg <= SLA_RESPONSE and err_pct <= SLA_ERROR_RATE)
+              table_rows.append(
+                  f"  {pass_t}  *{label[:28]}*\n"
+                  f"        Requests: {s['count']} | Errors: {s['errors']} ({err_pct}%) | "
+                  f"Avg: {avg}ms | Min: {mn}ms | Max: {mx}ms | P90: {p90_l}ms"
+              )
+
+          per_request_text = "\n".join(table_rows) if table_rows else "  _No sampler data found_"
+
+          # ── Build Slack Block Kit payload ─────────
+          payload = {
+              "attachments": [
+                  {
+                      "color": color,
+                      "blocks": [
+                          # Header
+                          {
+                              "type": "header",
+                              "text": {
+                                  "type": "plain_text",
+                                  "text": f"{emoji} JMeter Performance Test — {status}",
+                                  "emoji": True
+                              }
+                          },
+                          # Run context
+                          {
+                              "type": "section",
+                              "fields": [
+                                  {"type": "mrkdwn", "text": f"*Repository:*\n`{repo}`"},
+                                  {"type": "mrkdwn", "text": f"*Branch:*\n`{branch}`"},
+                                  {"type": "mrkdwn", "text": f"*Commit:*\n`{sha}`"},
+                                  {"type": "mrkdwn", "text": f"*Triggered by:*\n`{trigger}` (@{actor})"},
+                                  {"type": "mrkdwn", "text": f"*Run:*\n<{report_url}|#{run_num}>"},
+                                  {"type": "mrkdwn", "text": f"*Duration:*\n{int(duration_s)}s"}
+                              ]
+                          },
+                          {"type": "divider"},
+                          # Overall summary header
+                          {
+                              "type": "section",
+                              "text": {"type": "mrkdwn", "text": "*📊 Overall Summary*"}
+                          },
+                          # Summary table
+                          {
+                              "type": "section",
+                              "fields": [
+                                  {"type": "mrkdwn", "text": f"*Total Requests*\n{total_requests}"},
+                                  {"type": "mrkdwn", "text": f"*Total Errors*\n{total_errors}"},
+                                  {"type": "mrkdwn", "text": f"*Error Rate*\n{tick(err_ok)} {round(error_rate, 2)}% _(SLA: ≤{SLA_ERROR_RATE}%)_"},
+                                  {"type": "mrkdwn", "text": f"*Throughput*\n{tick(tput_ok)} {throughput} req/s _(SLA: ≥{SLA_THROUGHPUT})_"},
+                                  {"type": "mrkdwn", "text": f"*Avg Response Time*\n{tick(resp_ok)} {int(avg_response)}ms _(SLA: ≤{SLA_RESPONSE}ms)_"},
+                                  {"type": "mrkdwn", "text": f"*Min Response Time*\n{min_response}ms"}
+                              ]
+                          },
+                          # Percentiles
+                          {
+                              "type": "section",
+                              "fields": [
+                                  {"type": "mrkdwn", "text": f"*Max Response Time*\n{max_response}ms"},
+                                  {"type": "mrkdwn", "text": f"*P90*\n{p90}ms"},
+                                  {"type": "mrkdwn", "text": f"*P95*\n{p95}ms"},
+                                  {"type": "mrkdwn", "text": f"*P99*\n{p99}ms"}
+                              ]
+                          },
+                          {"type": "divider"},
+                          # Per-request breakdown header
+                          {
+                              "type": "section",
+                              "text": {"type": "mrkdwn", "text": "*📋 Per-Request Breakdown*"}
+                          },
+                          # Per-request rows
+                          {
+                              "type": "section",
+                              "text": {"type": "mrkdwn", "text": per_request_text}
+                          },
+                          {"type": "divider"},
+                          # SLA summary footer
+                          {
+                              "type": "section",
+                              "text": {
+                                  "type": "mrkdwn",
+                                  "text": (
+                                      f"*🎯 SLA Compliance*\n"
+                                      f"{tick(resp_ok)} Avg Response Time ≤ {SLA_RESPONSE}ms\n"
+                                      f"{tick(err_ok)} Error Rate ≤ {SLA_ERROR_RATE}%\n"
+                                      f"{tick(tput_ok)} Throughput ≥ {SLA_THROUGHPUT} req/s"
+                                  )
+                              }
+                          },
+                          # Action button
+                          {
+                              "type": "actions",
+                              "elements": [
+                                  {
+                                      "type": "button",
+                                      "text": {"type": "plain_text", "text": "📄 View Full Report", "emoji": True},
+                                      "url": report_url,
+                                      "style": "primary"
+                                  }
+                              ]
+                          }
+                      ]
+                  }
+              ]
+          }
+
+          with open("slack_payload.json", "w") as f:
+              json.dump(payload, f)
+
+          print("Slack payload generated successfully")
+          EOF
+        env:
+          JTL_FILE: ${{ env.JTL_FILE }}
+          TEST_STATUS: ${{ steps.test_status.outputs.status }}
+          STATUS_COLOR: ${{ steps.test_status.outputs.status_color }}
+          STATUS_EMOJI: ${{ steps.test_status.outputs.status_emoji }}
+
+      # ─────────────────────────────────────────
+      # STEP 10 — Send Slack Notification
+      # Requires SLACK_WEBHOOK_URL secret set in
+      # GitHub → Settings → Secrets → Actions
+      # ─────────────────────────────────────────
+      - name: Send Slack Notification
+        if: always()    # Send whether tests pass or fail
+        run: |
+          curl -s -X POST \
+            -H "Content-Type: application/json" \
+            -d @slack_payload.json \
+            ${{ secrets.SLACK_WEBHOOK_URL }}
+
+      # ─────────────────────────────────────────
+      # STEP 11 — Upload HTML report as artifact
+      # Downloadable from the GitHub Actions UI
+      # for 30 days
+      # ─────────────────────────────────────────
+      - name: Upload HTML Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: jmeter-html-report-${{ github.run_number }}
+          path: ${{ env.REPORT_DIR }}
+          retention-days: 30
+
+      # ─────────────────────────────────────────
+      # STEP 12 — Upload raw JTL file as artifact
+      # ─────────────────────────────────────────
+      - name: Upload JTL Results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: jmeter-jtl-${{ github.run_number }}
+          path: ${{ env.JTL_FILE }}
+          retention-days: 30
+
+      # ─────────────────────────────────────────
+      # STEP 13 — Upload JMeter log for debugging
+      # ─────────────────────────────────────────
+      - name: Upload JMeter Log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: jmeter-log-${{ github.run_number }}
+          path: ${{ env.RESULTS_DIR }}/jmeter.log
+          retention-days: 14
+
+      # ─────────────────────────────────────────
+      # STEP 14 — Fail the pipeline if tests failed
+      # Done last so all artifacts/notifications
+      # are uploaded before the job turns red
+      # ─────────────────────────────────────────
+      - name: Enforce Test Result
+        if: steps.run_tests.outcome == 'failure'
+        run: |
+          echo "❌ Performance tests failed. Check the HTML report artifact for details."
+          exit 1
