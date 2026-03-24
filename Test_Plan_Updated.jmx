@@ -1,0 +1,1884 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<jmeterTestPlan version="1.2" properties="5.0" jmeter="5.6.3">
+  <hashTree>
+    <TestPlan guiclass="TestPlanGui" testclass="TestPlan" testname="Test Plan">
+      <elementProp name="TestPlan.user_defined_variables" elementType="Arguments" guiclass="ArgumentsPanel" testclass="Arguments" testname="User Defined Variables">
+        <collectionProp name="Arguments.arguments"/>
+      </elementProp>
+    </TestPlan>
+    <hashTree>
+      <ConfigTestElement guiclass="HttpDefaultsGui" testclass="ConfigTestElement" testname="HTTP Request Defaults">
+        <stringProp name="TestPlan.comments">Global HTTP defaults shared across all thread groups and all requests. Sets the base domain to api.demoblaze.com (the JSON API backend), port 443, and HTTPS protocol. Individual HTTP samplers that target the frontend (www.demoblaze.com) override the domain at the sampler level. UTF-8 encoding ensures correct handling of all request and response character sets.</stringProp>
+        <stringProp name="HTTPSampler.domain">api.demoblaze.com</stringProp>
+        <stringProp name="HTTPSampler.port">443</stringProp>
+        <stringProp name="HTTPSampler.protocol">https</stringProp>
+        <stringProp name="HTTPSampler.contentEncoding">UTF-8</stringProp>
+        <elementProp name="HTTPsampler.Arguments" elementType="Arguments" guiclass="HTTPArgumentsPanel" testclass="Arguments" testname="User Defined Variables">
+          <collectionProp name="Arguments.arguments"/>
+        </elementProp>
+        <stringProp name="HTTPSampler.implementation">HttpClient4</stringProp>
+      </ConfigTestElement>
+      <hashTree/>
+      <HeaderManager guiclass="HeaderPanel" testclass="HeaderManager" testname="HTTP Header Manager" enabled="true">
+        <collectionProp name="HeaderManager.headers">
+          <elementProp name="" elementType="Header">
+            <stringProp name="Header.name">Content-Type</stringProp>
+            <stringProp name="Header.value">application/json</stringProp>
+          </elementProp>
+        </collectionProp>
+        <stringProp name="TestPlan.comments">Global HTTP Header Manager applied to all requests across all thread groups. Sets Content-Type to application/json so the Demoblaze API correctly interprets POST request bodies as JSON and returns JSON-formatted responses. Without this header, the login, product search, add-to-cart, and checkout endpoints would reject requests with a 400 or 415 error.</stringProp>
+      </HeaderManager>
+      <hashTree/>
+      <ThreadGroup guiclass="ThreadGroupGui" testclass="ThreadGroup" testname="LightLoad Test" enabled="false">
+        <stringProp name="TestPlan.comments">Baseline thread group simulating 50 concurrent users. Ramp-up of 50 seconds adds 1 new virtual user per second to avoid a sudden spike at test start, which would not reflect real-world traffic patterns. Each user completes 1 full end-to-end journey: Homepage → Login → Product Search → Product Details → Add to Cart → Checkout. This is run first to establish the performance baseline before increasing load in subsequent thread groups.</stringProp>
+        <intProp name="ThreadGroup.num_threads">50</intProp>
+        <intProp name="ThreadGroup.ramp_time">50</intProp>
+        <boolProp name="ThreadGroup.same_user_on_next_iteration">true</boolProp>
+        <stringProp name="ThreadGroup.on_sample_error">continue</stringProp>
+        <elementProp name="ThreadGroup.main_controller" elementType="LoopController" guiclass="LoopControlPanel" testclass="LoopController" testname="Loop Controller">
+          <stringProp name="LoopController.loops">1</stringProp>
+          <boolProp name="LoopController.continue_forever">false</boolProp>
+        </elementProp>
+      </ThreadGroup>
+      <hashTree>
+        <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="HTTP Request (GET-Homepage)">
+          <stringProp name="TestPlan.comments">Simulates a user landing on the Demoblaze homepage. Uses www.demoblaze.com (frontend domain) instead of the API domain since this is an HTML page load, not an API call. This is the entry point of every simulated user journey and models the very first network request a real user makes when opening the store.</stringProp>
+          <stringProp name="HTTPSampler.domain">www.demoblaze.com</stringProp>
+          <stringProp name="HTTPSampler.path">/index.html</stringProp>
+          <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
+          <stringProp name="HTTPSampler.method">GET</stringProp>
+          <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
+          <boolProp name="HTTPSampler.postBodyRaw">false</boolProp>
+          <elementProp name="HTTPsampler.Arguments" elementType="Arguments" guiclass="HTTPArgumentsPanel" testclass="Arguments" testname="User Defined Variables">
+            <collectionProp name="Arguments.arguments"/>
+          </elementProp>
+        </HTTPSamplerProxy>
+        <hashTree>
+          <ResponseAssertion guiclass="AssertionGui" testclass="ResponseAssertion" testname="Status Code Assertion - 200">
+            <collectionProp name="Asserion.test_strings">
+              <stringProp name="49586">200</stringProp>
+            </collectionProp>
+            <stringProp name="Assertion.custom_message">Homepage did not return HTTP 200 OK. The page may be unreachable or returning an error under load.</stringProp>
+            <stringProp name="Assertion.test_field">Assertion.response_code</stringProp>
+            <boolProp name="Assertion.assume_success">false</boolProp>
+            <intProp name="Assertion.test_type">16</intProp>
+            <stringProp name="TestPlan.comments">Validates the homepage returns HTTP 200 OK. A non-200 response at this step means the entry point of the application is failing, which would block all downstream steps for the affected virtual users.</stringProp>
+          </ResponseAssertion>
+          <hashTree/>
+          <ResponseAssertion guiclass="AssertionGui" testclass="ResponseAssertion" testname="Text Assertion - Homepage Content">
+            <collectionProp name="Asserion.test_strings">
+              <stringProp name="-680176080">PRODUCT STORE</stringProp>
+            </collectionProp>
+            <stringProp name="Assertion.custom_message">Homepage response body does not contain expected text &apos;PRODUCT STORE&apos;. The server may have returned a cached error page or an incomplete response.</stringProp>
+            <stringProp name="Assertion.test_field">Assertion.response_data</stringProp>
+            <boolProp name="Assertion.assume_success">false</boolProp>
+            <intProp name="Assertion.test_type">2</intProp>
+            <stringProp name="TestPlan.comments">Validates the homepage response body contains the expected text &apos;PRODUCT STORE&apos;, confirming the correct page is being served. A 200 status code alone is not sufficient hence this assertion catches cases where a 200 is returned but the page content is an error page or empty response body, which can happen when a CDN(content delivery network) or load balancer is returning a cached failure page.</stringProp>
+          </ResponseAssertion>
+          <hashTree/>
+          <DurationAssertion guiclass="DurationAssertionGui" testclass="DurationAssertion" testname="Duration Assertion - 2000ms">
+            <stringProp name="DurationAssertion.duration">2000</stringProp>
+            <stringProp name="TestPlan.comments">Validates homepage response time does not exceed 2000ms (2 seconds) as defined in the performance requirements. Any response exceeding this threshold will be marked as a failed assertion in the results, contributing to the assertion error count in the Aggregate Report.</stringProp>
+          </DurationAssertion>
+          <hashTree/>
+          <GaussianRandomTimer guiclass="GaussianRandomTimerGui" testclass="GaussianRandomTimer" testname="Gaussian Random Timer">
+            <stringProp name="ConstantTimer.delay">1000</stringProp>
+            <stringProp name="RandomTimer.range">3000</stringProp>
+            <stringProp name="TestPlan.comments">Simulates realistic user think time between loading the homepage and navigating to login. Uses a Gaussian distribution with a 1000ms fixed offset and up to 3000ms random deviation, producing think times roughly between 1–4 seconds. This prevents all 50 virtual users from sending their next request simultaneously, which would not reflect real browsing behaviour.</stringProp>
+          </GaussianRandomTimer>
+          <hashTree/>
+        </hashTree>
+        <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="HTTP Request (POST-Login)">
+          <stringProp name="TestPlan.comments">Simulates a user logging into the application. Sends a POST request with credentials to the /login endpoint. The response body contains an authentication token in the format &apos;Auth_token: xxxx&apos; which is extracted by the Regex Extractor and stored in the JMeter variable ${auth_token}. This token is injected into the Add to Cart (Step 5) and Checkout (Step 6) request bodies to authenticate those operations.</stringProp>
+          <stringProp name="HTTPSampler.domain">api.demoblaze.com</stringProp>
+          <stringProp name="HTTPSampler.protocol">https</stringProp>
+          <stringProp name="HTTPSampler.path">/login</stringProp>
+          <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
+          <stringProp name="HTTPSampler.method">POST</stringProp>
+          <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
+          <boolProp name="HTTPSampler.postBodyRaw">true</boolProp>
+          <elementProp name="HTTPsampler.Arguments" elementType="Arguments">
+            <collectionProp name="Arguments.arguments">
+              <elementProp name="" elementType="HTTPArgument">
+                <boolProp name="HTTPArgument.always_encode">false</boolProp>
+                <stringProp name="Argument.value">{&quot;username&quot;:&quot;Joojo Killer&quot;, &quot;password&quot;:&quot;123456789&quot;}</stringProp>
+                <stringProp name="Argument.metadata">=</stringProp>
+              </elementProp>
+            </collectionProp>
+          </elementProp>
+        </HTTPSamplerProxy>
+        <hashTree>
+          <ResponseAssertion guiclass="AssertionGui" testclass="ResponseAssertion" testname="Status Code Assertion - 200">
+            <collectionProp name="Asserion.test_strings">
+              <stringProp name="49586">200</stringProp>
+            </collectionProp>
+            <stringProp name="Assertion.custom_message">Login endpoint did not return HTTP 200 OK. Authentication may be failing under load — this will cause all downstream authenticated requests (Add to Cart, Checkout) to fail as well.</stringProp>
+            <stringProp name="Assertion.test_field">Assertion.response_code</stringProp>
+            <boolProp name="Assertion.assume_success">false</boolProp>
+            <intProp name="Assertion.test_type">16</intProp>
+            <stringProp name="TestPlan.comments">Validates the login endpoint returns HTTP 200 OK. Login is a bottleneck-prone step because it often involves password hashing and session creation (database write). Failure here cascades to every subsequent authenticated step for the affected virtual user.</stringProp>
+          </ResponseAssertion>
+          <hashTree/>
+          <ResponseAssertion guiclass="AssertionGui" testclass="ResponseAssertion" testname="Text Assertion - Auth Token Present">
+            <collectionProp name="Asserion.test_strings">
+              <stringProp name="36698306">Auth_token</stringProp>
+            </collectionProp>
+            <stringProp name="Assertion.custom_message">Login response body does not contain &apos;Auth_token&apos;. Login may have returned 200 but failed silently — the Regex Extractor will fall back to &apos;NOT_FOUND&apos;, causing Add to Cart and Checkout to fail with authorization errors.</stringProp>
+            <stringProp name="Assertion.test_field">Assertion.response_data</stringProp>
+            <boolProp name="Assertion.assume_success">false</boolProp>
+            <intProp name="Assertion.test_type">2</intProp>
+            <stringProp name="TestPlan.comments">Validates the login response body contains the text &apos;Auth_token&apos;, confirming a successful authentication that produced a usable token. A 200 status code with no token in the body means login succeeded at the HTTP level but failed at the application level; a subtle failure mode that status code assertions alone cannot catch.</stringProp>
+          </ResponseAssertion>
+          <hashTree/>
+          <DurationAssertion guiclass="DurationAssertionGui" testclass="DurationAssertion" testname="Duration Assertion - 2000ms">
+            <stringProp name="DurationAssertion.duration">2000</stringProp>
+            <stringProp name="TestPlan.comments">Validates login responds within 2000ms. Slow authentication is a high-impact bottleneck because every user session must pass through this step before any other action can proceed.</stringProp>
+          </DurationAssertion>
+          <hashTree/>
+          <RegexExtractor guiclass="RegexExtractorGui" testclass="RegexExtractor" testname="Regex Extractor - Auth Token">
+            <stringProp name="RegexExtractor.useHeaders">false</stringProp>
+            <stringProp name="RegexExtractor.refname">auth_token</stringProp>
+            <stringProp name="RegexExtractor.regex">Auth_token: (.+?)&quot;</stringProp>
+            <stringProp name="RegexExtractor.template">$1$</stringProp>
+            <stringProp name="RegexExtractor.default">NOT_FOUND</stringProp>
+            <stringProp name="RegexExtractor.match_no">1</stringProp>
+            <stringProp name="TestPlan.comments">Extracts the authentication token from the login response body using a non-greedy regex pattern. The Demoblaze API returns a response body containing &apos;Auth_token: xxxx&apos; . This extractor captures the token value and stores it in the JMeter thread-local variable ${auth_token}. Each virtual user thread gets its own copy of this variable. If extraction fails (e.g. login returned no token), the fallback value &apos;NOT_FOUND&apos; is used, which will intentionally cause the downstream Add to Cart and Checkout requests to return auth errors  making the upstream login failure visible as a cascade in the performance results rather than hiding it.</stringProp>
+            <boolProp name="RegexExtractor.default_empty_value">false</boolProp>
+            <stringProp name="RegexExtractor.match_number"></stringProp>
+          </RegexExtractor>
+          <hashTree/>
+          <GaussianRandomTimer guiclass="GaussianRandomTimerGui" testclass="GaussianRandomTimer" testname="Gaussian Random Timer">
+            <stringProp name="ConstantTimer.delay">1000</stringProp>
+            <stringProp name="RandomTimer.range">3000</stringProp>
+            <stringProp name="TestPlan.comments">Simulates realistic user think time after login before beginning product browsing. Represents the brief moment after a user logs in and waits for the page to redirect before starting to shop.</stringProp>
+          </GaussianRandomTimer>
+          <hashTree/>
+        </hashTree>
+        <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="HTTP Request (POST-ProductSearch)">
+          <stringProp name="TestPlan.comments">Simulates a user browsing the &apos;phone&apos; product category. Sends a POST request to /bycat with a JSON body containing the category name. This endpoint performs a database query to retrieve all products in the requested category making it a read-heavy operation that is a common bottleneck when many users browse simultaneously.</stringProp>
+          <stringProp name="HTTPSampler.domain">api.demoblaze.com</stringProp>
+          <stringProp name="HTTPSampler.path">/bycat</stringProp>
+          <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
+          <stringProp name="HTTPSampler.method">POST</stringProp>
+          <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
+          <boolProp name="HTTPSampler.postBodyRaw">true</boolProp>
+          <elementProp name="HTTPsampler.Arguments" elementType="Arguments">
+            <collectionProp name="Arguments.arguments">
+              <elementProp name="" elementType="HTTPArgument">
+                <boolProp name="HTTPArgument.always_encode">false</boolProp>
+                <stringProp name="Argument.value">{&quot;cat&quot;:&quot;phone&quot;}</stringProp>
+                <stringProp name="Argument.metadata">=</stringProp>
+              </elementProp>
+            </collectionProp>
+          </elementProp>
+        </HTTPSamplerProxy>
+        <hashTree>
+          <ResponseAssertion guiclass="AssertionGui" testclass="ResponseAssertion" testname="Status Code Assertion - 200">
+            <collectionProp name="Asserion.test_strings">
+              <stringProp name="49586">200</stringProp>
+            </collectionProp>
+            <stringProp name="Assertion.custom_message">Product Search (/bycat) did not return HTTP 200 OK. The product catalog service may be overloaded or the database query is timing out under load.</stringProp>
+            <stringProp name="Assertion.test_field">Assertion.response_code</stringProp>
+            <boolProp name="Assertion.assume_success">false</boolProp>
+            <intProp name="Assertion.test_type">16</intProp>
+            <stringProp name="TestPlan.comments">Validates the product search endpoint returns HTTP 200 OK. This endpoint is database-read intensive — failures under increasing load are a strong indicator of database connection pool exhaustion or slow query performance.</stringProp>
+          </ResponseAssertion>
+          <hashTree/>
+          <ResponseAssertion guiclass="AssertionGui" testclass="ResponseAssertion" testname="Text Assertion - Product Items Present">
+            <collectionProp name="Asserion.test_strings">
+              <stringProp name="70973344">Items</stringProp>
+            </collectionProp>
+            <stringProp name="Assertion.custom_message">Product Search response body does not contain &apos;Items&apos;. The API may be returning an empty, truncated, or malformed JSON response under load even with a 200 status code.</stringProp>
+            <stringProp name="Assertion.test_field">Assertion.response_data</stringProp>
+            <boolProp name="Assertion.assume_success">false</boolProp>
+            <intProp name="Assertion.test_type">2</intProp>
+            <stringProp name="TestPlan.comments"> Validates the product search response body contains the key &apos;Items&apos; confirming the API returned a valid product list JSON object. An empty &apos;Items&apos; array or malformed response body , even with an HTTP 200 , indicates the database query returned no results or was truncated under load. This is the category of bug that status code assertions alone cannot detect.</stringProp>
+          </ResponseAssertion>
+          <hashTree/>
+          <DurationAssertion guiclass="DurationAssertionGui" testclass="DurationAssertion" testname="Duration Assertion - 2000ms">
+            <stringProp name="DurationAssertion.duration">2000</stringProp>
+            <stringProp name="TestPlan.comments">Validates product search responds within 2000ms. Product listing is a high-frequency user action — elevated response times here directly impact perceived application performance and user satisfaction.</stringProp>
+          </DurationAssertion>
+          <hashTree/>
+          <GaussianRandomTimer guiclass="GaussianRandomTimerGui" testclass="GaussianRandomTimer" testname="Gaussian Random Timer">
+            <stringProp name="ConstantTimer.delay">1000</stringProp>
+            <stringProp name="RandomTimer.range">3000</stringProp>
+            <stringProp name="TestPlan.comments">Simulates the time a user spends scrolling through the product listing page before selecting a specific product to view in detail.</stringProp>
+          </GaussianRandomTimer>
+          <hashTree/>
+          <RegexExtractor guiclass="RegexExtractorGui" testclass="RegexExtractor" testname="Regex Extractor - Product ID">
+            <stringProp name="RegexExtractor.useHeaders">false</stringProp>
+            <stringProp name="RegexExtractor.refname">PRODUCT_ID</stringProp>
+            <stringProp name="RegexExtractor.regex">&quot;id&quot;:([0-9]+)</stringProp>
+            <stringProp name="RegexExtractor.template">$1$</stringProp>
+            <stringProp name="RegexExtractor.default">1</stringProp>
+            <boolProp name="RegexExtractor.default_empty_value">false</boolProp>
+            <stringProp name="RegexExtractor.match_number"></stringProp>
+          </RegexExtractor>
+          <hashTree/>
+        </hashTree>
+        <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="HTTP Request (GET-ProductDetails)">
+          <stringProp name="TestPlan.comments"> Simulates a user clicking on a specific product to view its details page. Requests /prod.html with the query parameter idp_=1 (Samsung Galaxy S6, product ID 1). Uses the www.demoblaze.com frontend domain since this is an HTML page request. This page triggers additional background API calls in a real browser. In this test we capture the page load itself as the critical transaction.</stringProp>
+          <stringProp name="HTTPSampler.domain">www.demoblaze.com</stringProp>
+          <stringProp name="HTTPSampler.path">/prod.html</stringProp>
+          <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
+          <stringProp name="HTTPSampler.method">GET</stringProp>
+          <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
+          <boolProp name="HTTPSampler.postBodyRaw">false</boolProp>
+          <elementProp name="HTTPsampler.Arguments" elementType="Arguments" guiclass="HTTPArgumentsPanel" testclass="Arguments" testname="User Defined Variables">
+            <collectionProp name="Arguments.arguments">
+              <elementProp name="idp_" elementType="HTTPArgument">
+                <boolProp name="HTTPArgument.always_encode">false</boolProp>
+                <stringProp name="Argument.value">1</stringProp>
+                <stringProp name="Argument.metadata">=</stringProp>
+                <boolProp name="HTTPArgument.use_equals">true</boolProp>
+                <stringProp name="Argument.name">idp_</stringProp>
+              </elementProp>
+            </collectionProp>
+          </elementProp>
+        </HTTPSamplerProxy>
+        <hashTree>
+          <ResponseAssertion guiclass="AssertionGui" testclass="ResponseAssertion" testname="Status Code Assertion - 200">
+            <collectionProp name="Asserion.test_strings">
+              <stringProp name="49586">200</stringProp>
+            </collectionProp>
+            <stringProp name="Assertion.custom_message">Product Details page did not return HTTP 200 OK. The page may be failing or timing out under load.</stringProp>
+            <stringProp name="Assertion.test_field">Assertion.response_code</stringProp>
+            <boolProp name="Assertion.assume_success">false</boolProp>
+            <intProp name="Assertion.test_type">16</intProp>
+            <stringProp name="TestPlan.comments">Validates the product details page returns HTTP 200 OK. This is a conversion-critical page — failures here mean users cannot view product information and therefore cannot proceed to add items to their cart.</stringProp>
+          </ResponseAssertion>
+          <hashTree/>
+          <ResponseAssertion guiclass="AssertionGui" testclass="ResponseAssertion" testname="Text Assertion - Add to Cart Button Present">
+            <collectionProp name="Asserion.test_strings">
+              <stringProp name="-649020154">Add to cart</stringProp>
+            </collectionProp>
+            <stringProp name="Assertion.custom_message">Product Details page does not contain &apos;Add to cart&apos;. The page may have rendered incompletely or returned a generic error page with a 200 status code.</stringProp>
+            <stringProp name="Assertion.test_field">Assertion.response_data</stringProp>
+            <boolProp name="Assertion.assume_success">false</boolProp>
+            <intProp name="Assertion.test_type">2</intProp>
+            <stringProp name="TestPlan.comments">Validates the product details page contains the text &apos;Add to cart&apos;, confirming the correct product page was fully rendered by the server. Partial renders or fallback error pages served with a 200 status would not contain this text and would be caught by this assertion.</stringProp>
+          </ResponseAssertion>
+          <hashTree/>
+          <DurationAssertion guiclass="DurationAssertionGui" testclass="DurationAssertion" testname="Duration Assertion - 2000ms">
+            <stringProp name="DurationAssertion.duration">2000</stringProp>
+            <stringProp name="TestPlan.comments">Validates product details page loads within 2000ms. This is a key conversion page — slow loads here directly reduce the likelihood of users completing a purchase.</stringProp>
+          </DurationAssertion>
+          <hashTree/>
+          <GaussianRandomTimer guiclass="GaussianRandomTimerGui" testclass="GaussianRandomTimer" testname="Gaussian Random Timer">
+            <stringProp name="ConstantTimer.delay">2000</stringProp>
+            <stringProp name="RandomTimer.range">3000</stringProp>
+            <stringProp name="TestPlan.comments">Simulates longer user think time on the product details page. Users typically read product descriptions, view images, and check specifications before deciding to add the item to their cart. The higher base delay (2000ms vs 1000ms) reflects this more deliberate browsing behaviour.</stringProp>
+          </GaussianRandomTimer>
+          <hashTree/>
+        </hashTree>
+        <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="HTTP Request (POST-AddToCart)">
+          <stringProp name="TestPlan.comments"> Simulates a user adding product ID 1 to their shopping cart. This is an authenticated POST request that requires the ${auth_token} variable extracted from the Login response in Step 2. The &apos;flag:true&apos; parameter signals an add operation to the cart service. If ${auth_token} resolved to &apos;NOT_FOUND&apos; (due to a login failure), this request will fail with an auth error  making the upstream login failure visible in the performance report as a downstream cascade rather than silently passing.</stringProp>
+          <stringProp name="HTTPSampler.domain">api.demoblaze.com</stringProp>
+          <stringProp name="HTTPSampler.path">/addtocart</stringProp>
+          <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
+          <stringProp name="HTTPSampler.method">POST</stringProp>
+          <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
+          <boolProp name="HTTPSampler.postBodyRaw">true</boolProp>
+          <elementProp name="HTTPsampler.Arguments" elementType="Arguments">
+            <collectionProp name="Arguments.arguments">
+              <elementProp name="" elementType="HTTPArgument">
+                <boolProp name="HTTPArgument.always_encode">false</boolProp>
+                <stringProp name="Argument.value">{&quot;id&quot;:&quot;1&quot;,&quot;cookie&quot;:&quot;Joojo Killer&quot;,&quot;prod_id&quot;:${PRODUCT_ID},&quot;flag&quot;:true}</stringProp>
+                <stringProp name="Argument.metadata">=</stringProp>
+              </elementProp>
+            </collectionProp>
+          </elementProp>
+        </HTTPSamplerProxy>
+        <hashTree>
+          <ResponseAssertion guiclass="AssertionGui" testclass="ResponseAssertion" testname="Status Code Assertion - 200">
+            <collectionProp name="Asserion.test_strings">
+              <stringProp name="49586">200</stringProp>
+            </collectionProp>
+            <stringProp name="Assertion.custom_message">Add to Cart (/addtocart) did not return HTTP 200 OK. Check whether the ${auth_token} was successfully extracted from the Login step, or whether the cart service is degrading under load.</stringProp>
+            <stringProp name="Assertion.test_field">Assertion.response_code</stringProp>
+            <boolProp name="Assertion.assume_success">false</boolProp>
+            <intProp name="Assertion.test_type">16</intProp>
+            <stringProp name="TestPlan.comments">Validates the Add to Cart endpoint returns HTTP 200 OK. This is an authenticated database write operation where failures indicate either an invalid auth token (upstream login failure) or write-path degradation under concurrent load such as database lock contention or connection pool exhaustion.</stringProp>
+          </ResponseAssertion>
+          <hashTree/>
+          <DurationAssertion guiclass="DurationAssertionGui" testclass="DurationAssertion" testname="Duration Assertion - 2000ms">
+            <stringProp name="DurationAssertion.duration">2000</stringProp>
+            <stringProp name="TestPlan.comments">Validates Add to Cart completes within 2000ms. Write operations are more resource-intensive than reads hence elevated response times here compared to LightLoad indicate the write path is degrading under concurrent cart operations.</stringProp>
+          </DurationAssertion>
+          <hashTree/>
+          <GaussianRandomTimer guiclass="GaussianRandomTimerGui" testclass="GaussianRandomTimer" testname="Gaussian Random Timer">
+            <stringProp name="ConstantTimer.delay">1000</stringProp>
+            <stringProp name="RandomTimer.range">2000</stringProp>
+            <stringProp name="TestPlan.comments">Simulates brief think time after adding an item to the cart before navigating to checkout. This is shorter than product browsing think times as it represents a more deliberate, transactional user action.</stringProp>
+          </GaussianRandomTimer>
+          <hashTree/>
+        </hashTree>
+        <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="HTTP Request (POST-Checkout)">
+          <stringProp name="TestPlan.comments"> Simulates the user completing checkout by submitting an order via POST to /send. This is the most business-critical transaction in the entire user journey. The request body includes order details (name, country, city, card) and the ${auth_token} for session authentication. In a production system, this step typically involves multiple synchronous database writes (order creation, cart clearance, inventory decrement) making it the most latency-sensitive and resource-intensive endpoint. Any error rate above 1% here is an immediate critical finding.</stringProp>
+          <stringProp name="HTTPSampler.domain">api.demoblaze.com</stringProp>
+          <stringProp name="HTTPSampler.path">/send</stringProp>
+          <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
+          <stringProp name="HTTPSampler.method">POST</stringProp>
+          <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
+          <boolProp name="HTTPSampler.postBodyRaw">true</boolProp>
+          <elementProp name="HTTPsampler.Arguments" elementType="Arguments">
+            <collectionProp name="Arguments.arguments">
+              <elementProp name="" elementType="HTTPArgument">
+                <boolProp name="HTTPArgument.always_encode">false</boolProp>
+                <stringProp name="Argument.value">{&quot;cookie&quot;:&quot;Joojo Killer&quot;}</stringProp>
+                <stringProp name="Argument.metadata">=</stringProp>
+              </elementProp>
+            </collectionProp>
+          </elementProp>
+        </HTTPSamplerProxy>
+        <hashTree>
+          <ResponseAssertion guiclass="AssertionGui" testclass="ResponseAssertion" testname="Status Code Assertion - 200">
+            <collectionProp name="Asserion.test_strings">
+              <stringProp name="49586">200</stringProp>
+            </collectionProp>
+            <stringProp name="Assertion.custom_message">Checkout (/send) did not return HTTP 200 OK. This is a critical failure — order placement is broken at this load level. Check auth token validity and database write capacity.</stringProp>
+            <stringProp name="Assertion.test_field">Assertion.response_code</stringProp>
+            <boolProp name="Assertion.assume_success">false</boolProp>
+            <intProp name="Assertion.test_type">16</intProp>
+            <stringProp name="TestPlan.comments">Validates the Checkout endpoint returns HTTP 200 OK. Checkout failure is the most severe finding in any e-commerce performance test. It means orders are being dropped under load. An error rate exceeding the 1% threshold defined in the performance goals is an immediate blocker.</stringProp>
+          </ResponseAssertion>
+          <hashTree/>
+          <DurationAssertion guiclass="DurationAssertionGui" testclass="DurationAssertion" testname="Duration Assertion - 2000ms">
+            <stringProp name="DurationAssertion.duration">2000</stringProp>
+            <stringProp name="TestPlan.comments">Validates the Checkout operation completes within 2000ms. This is the most write-intensive endpoint , multiple database operations are performed synchronously. Duration assertion failures here under increasing load are the primary indicator of database write-path bottlenecks.</stringProp>
+          </DurationAssertion>
+          <hashTree/>
+          <GaussianRandomTimer guiclass="GaussianRandomTimerGui" testclass="GaussianRandomTimer" testname="Gaussian Random Timer">
+            <stringProp name="ConstantTimer.delay">1000</stringProp>
+            <stringProp name="RandomTimer.range">2000</stringProp>
+            <stringProp name="TestPlan.comments">Simulates brief think time after checkout , representing the user reading the order confirmation before closing the browser. This is the final step in the user journey for this loop iteration.</stringProp>
+          </GaussianRandomTimer>
+          <hashTree/>
+        </hashTree>
+      </hashTree>
+      <ResultCollector guiclass="SummaryReport" testclass="ResultCollector" testname="Summary Report">
+        <boolProp name="ResultCollector.error_logging">false</boolProp>
+        <objProp>
+          <name>saveConfig</name>
+          <value class="SampleSaveConfiguration">
+            <time>true</time>
+            <latency>true</latency>
+            <timestamp>true</timestamp>
+            <success>true</success>
+            <label>true</label>
+            <code>true</code>
+            <message>true</message>
+            <threadName>true</threadName>
+            <dataType>true</dataType>
+            <encoding>false</encoding>
+            <assertions>true</assertions>
+            <subresults>true</subresults>
+            <responseData>false</responseData>
+            <samplerData>false</samplerData>
+            <xml>false</xml>
+            <fieldNames>true</fieldNames>
+            <responseHeaders>false</responseHeaders>
+            <requestHeaders>false</requestHeaders>
+            <responseDataOnError>false</responseDataOnError>
+            <saveAssertionResultsFailureMessage>true</saveAssertionResultsFailureMessage>
+            <assertionsResultsToSave>0</assertionsResultsToSave>
+            <bytes>true</bytes>
+            <sentBytes>true</sentBytes>
+            <url>true</url>
+            <threadCounts>true</threadCounts>
+            <idleTime>true</idleTime>
+            <connectTime>true</connectTime>
+          </value>
+        </objProp>
+        <objProp>
+          <name></name>
+          <value class="SampleSaveConfiguration">
+            <time>true</time>
+            <latency>true</latency>
+            <timestamp>true</timestamp>
+            <success>true</success>
+            <label>true</label>
+            <code>true</code>
+            <message>true</message>
+            <threadName>true</threadName>
+            <dataType>true</dataType>
+            <encoding>false</encoding>
+            <assertions>true</assertions>
+            <subresults>true</subresults>
+            <responseData>false</responseData>
+            <samplerData>false</samplerData>
+            <xml>false</xml>
+            <fieldNames>true</fieldNames>
+            <responseHeaders>false</responseHeaders>
+            <requestHeaders>false</requestHeaders>
+            <responseDataOnError>false</responseDataOnError>
+            <saveAssertionResultsFailureMessage>true</saveAssertionResultsFailureMessage>
+            <assertionsResultsToSave>0</assertionsResultsToSave>
+            <bytes>true</bytes>
+            <sentBytes>true</sentBytes>
+            <url>true</url>
+            <threadCounts>true</threadCounts>
+            <idleTime>true</idleTime>
+            <connectTime>true</connectTime>
+          </value>
+        </objProp>
+        <stringProp name="filename">results/summary_report.jtl</stringProp>
+        <stringProp name="TestPlan.comments"> Summary Report listener. Collects high-level aggregated results for all samplers including average response time, min/max, throughput (requests/sec), and overall error rate. Output is saved to results/summary_report.jtl. This .jtl file is the required input for generating the JMeter HTML Dashboard Report using the CLI command: jmeter -g results/summary_report.jtl -o results/html_report/. The HTML dashboard provides the response time percentiles (90th, 95th), throughput over time, and error rate graphs required in the project scope reporting phase.</stringProp>
+      </ResultCollector>
+      <hashTree/>
+      <ResultCollector guiclass="StatVisualizer" testclass="ResultCollector" testname="Aggregate Report">
+        <boolProp name="ResultCollector.error_logging">false</boolProp>
+        <objProp>
+          <name>saveConfig</name>
+          <value class="SampleSaveConfiguration">
+            <time>true</time>
+            <latency>true</latency>
+            <timestamp>true</timestamp>
+            <success>true</success>
+            <label>true</label>
+            <code>true</code>
+            <message>true</message>
+            <threadName>true</threadName>
+            <dataType>true</dataType>
+            <encoding>false</encoding>
+            <assertions>true</assertions>
+            <subresults>true</subresults>
+            <responseData>false</responseData>
+            <samplerData>false</samplerData>
+            <xml>false</xml>
+            <fieldNames>true</fieldNames>
+            <responseHeaders>false</responseHeaders>
+            <requestHeaders>false</requestHeaders>
+            <responseDataOnError>false</responseDataOnError>
+            <saveAssertionResultsFailureMessage>true</saveAssertionResultsFailureMessage>
+            <assertionsResultsToSave>0</assertionsResultsToSave>
+            <bytes>true</bytes>
+            <sentBytes>true</sentBytes>
+            <url>true</url>
+            <threadCounts>true</threadCounts>
+            <idleTime>true</idleTime>
+            <connectTime>true</connectTime>
+          </value>
+        </objProp>
+        <objProp>
+          <name></name>
+          <value class="SampleSaveConfiguration">
+            <time>true</time>
+            <latency>true</latency>
+            <timestamp>true</timestamp>
+            <success>true</success>
+            <label>true</label>
+            <code>true</code>
+            <message>true</message>
+            <threadName>true</threadName>
+            <dataType>true</dataType>
+            <encoding>false</encoding>
+            <assertions>true</assertions>
+            <subresults>true</subresults>
+            <responseData>false</responseData>
+            <samplerData>false</samplerData>
+            <xml>false</xml>
+            <fieldNames>true</fieldNames>
+            <responseHeaders>false</responseHeaders>
+            <requestHeaders>false</requestHeaders>
+            <responseDataOnError>false</responseDataOnError>
+            <saveAssertionResultsFailureMessage>true</saveAssertionResultsFailureMessage>
+            <assertionsResultsToSave>0</assertionsResultsToSave>
+            <bytes>true</bytes>
+            <sentBytes>true</sentBytes>
+            <url>true</url>
+            <threadCounts>true</threadCounts>
+            <idleTime>true</idleTime>
+            <connectTime>true</connectTime>
+          </value>
+        </objProp>
+        <stringProp name="filename">results/aggregate_report.jtl</stringProp>
+        <stringProp name="TestPlan.comments"> Aggregate Report listener. This was missing from the original test plan and is required by the project scope. The Aggregate Report provides per-sampler breakdowns including: 90th, 95th, and 99th response time percentiles; min and max response times; standard deviation; throughput in requests/sec; average bytes sent and received; and per-endpoint error percentage. This is the primary listener for detailed performance analysis and bottleneck identification. Results saved to results/aggregate_report.jtl. Compare this report across LightLoad, MediumLoad, PeakLoad, and StressTest runs to quantify performance degradation as load increases.</stringProp>
+      </ResultCollector>
+      <hashTree/>
+      <ResultCollector guiclass="ViewResultsFullVisualizer" testclass="ResultCollector" testname="View Results Tree">
+        <boolProp name="ResultCollector.error_logging">false</boolProp>
+        <objProp>
+          <name>saveConfig</name>
+          <value class="SampleSaveConfiguration">
+            <time>true</time>
+            <latency>true</latency>
+            <timestamp>true</timestamp>
+            <success>true</success>
+            <label>true</label>
+            <code>true</code>
+            <message>true</message>
+            <threadName>true</threadName>
+            <dataType>true</dataType>
+            <encoding>false</encoding>
+            <assertions>true</assertions>
+            <subresults>true</subresults>
+            <responseData>false</responseData>
+            <samplerData>false</samplerData>
+            <xml>false</xml>
+            <fieldNames>true</fieldNames>
+            <responseHeaders>false</responseHeaders>
+            <requestHeaders>false</requestHeaders>
+            <responseDataOnError>false</responseDataOnError>
+            <saveAssertionResultsFailureMessage>true</saveAssertionResultsFailureMessage>
+            <assertionsResultsToSave>0</assertionsResultsToSave>
+            <bytes>true</bytes>
+            <sentBytes>true</sentBytes>
+            <url>true</url>
+            <threadCounts>true</threadCounts>
+            <idleTime>true</idleTime>
+            <connectTime>true</connectTime>
+          </value>
+        </objProp>
+        <objProp>
+          <name></name>
+          <value class="SampleSaveConfiguration">
+            <time>true</time>
+            <latency>true</latency>
+            <timestamp>true</timestamp>
+            <success>true</success>
+            <label>true</label>
+            <code>true</code>
+            <message>true</message>
+            <threadName>true</threadName>
+            <dataType>true</dataType>
+            <encoding>false</encoding>
+            <assertions>true</assertions>
+            <subresults>true</subresults>
+            <responseData>false</responseData>
+            <samplerData>false</samplerData>
+            <xml>false</xml>
+            <fieldNames>true</fieldNames>
+            <responseHeaders>false</responseHeaders>
+            <requestHeaders>false</requestHeaders>
+            <responseDataOnError>false</responseDataOnError>
+            <saveAssertionResultsFailureMessage>true</saveAssertionResultsFailureMessage>
+            <assertionsResultsToSave>0</assertionsResultsToSave>
+            <bytes>true</bytes>
+            <sentBytes>true</sentBytes>
+            <url>true</url>
+            <threadCounts>true</threadCounts>
+            <idleTime>true</idleTime>
+            <connectTime>true</connectTime>
+          </value>
+        </objProp>
+        <stringProp name="filename">results/view_results_tree.jtl</stringProp>
+        <stringProp name="TestPlan.comments"> View Results Tree listener. Used for request/response-level debugging during test validation. Shows full request details, response headers, response body, and assertion pass/fail status for each individual sample. IMPORTANT: Disable this listener when running MediumLoad, PeakLoad, StressTest, and EnduranceTest thread groups. At high concurrency, this listener buffers large volumes of response data in memory and generates significant disk I/O, which can artificially inflate response times and skew the performance results. Use it only during LightLoad validation runs to verify correct behaviour before scaling up.</stringProp>
+      </ResultCollector>
+      <hashTree/>
+      <ThreadGroup guiclass="ThreadGroupGui" testclass="ThreadGroup" testname="MediumLoad Test" enabled="false">
+        <stringProp name="TestPlan.comments">Medium load thread group simulating 150 concurrent users with a 150-second ramp-up (1 new user per second). Each user completes 2 full loops of the end-to-end user journey.This is run this after the LightLoad baseline to observe how response times, throughput, and error rates change as concurrent users triple from 50 to 150.</stringProp>
+        <intProp name="ThreadGroup.num_threads">150</intProp>
+        <intProp name="ThreadGroup.ramp_time">150</intProp>
+        <boolProp name="ThreadGroup.same_user_on_next_iteration">true</boolProp>
+        <stringProp name="ThreadGroup.on_sample_error">continue</stringProp>
+        <elementProp name="ThreadGroup.main_controller" elementType="LoopController" guiclass="LoopControlPanel" testclass="LoopController" testname="Loop Controller">
+          <stringProp name="LoopController.loops">2</stringProp>
+          <boolProp name="LoopController.continue_forever">false</boolProp>
+        </elementProp>
+      </ThreadGroup>
+      <hashTree>
+        <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="HTTP Request (GET-Homepage)">
+          <stringProp name="TestPlan.comments"> Homepage request for 150 concurrent users. Response times are compared against the LightLoad baseline to detect early signs of server degradation as concurrent connections increase from 50 to 150.</stringProp>
+          <stringProp name="HTTPSampler.domain">www.demoblaze.com</stringProp>
+          <stringProp name="HTTPSampler.path">/index.html</stringProp>
+          <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
+          <stringProp name="HTTPSampler.method">GET</stringProp>
+          <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
+          <boolProp name="HTTPSampler.postBodyRaw">false</boolProp>
+          <elementProp name="HTTPsampler.Arguments" elementType="Arguments" guiclass="HTTPArgumentsPanel" testclass="Arguments" testname="User Defined Variables">
+            <collectionProp name="Arguments.arguments"/>
+          </elementProp>
+        </HTTPSamplerProxy>
+        <hashTree>
+          <ResponseAssertion guiclass="AssertionGui" testclass="ResponseAssertion" testname="Status Code Assertion - 200">
+            <collectionProp name="Asserion.test_strings">
+              <stringProp name="49586">200</stringProp>
+            </collectionProp>
+            <stringProp name="Assertion.custom_message">Homepage did not return HTTP 200 OK under medium load (150 users).</stringProp>
+            <stringProp name="Assertion.test_field">Assertion.response_code</stringProp>
+            <boolProp name="Assertion.assume_success">false</boolProp>
+            <intProp name="Assertion.test_type">16</intProp>
+            <stringProp name="TestPlan.comments">Validates homepage returns HTTP 200 OK under 150 concurrent users. An error rate increase vs LightLoad indicates early scalability issues at the web server or CDN layer.</stringProp>
+          </ResponseAssertion>
+          <hashTree/>
+          <ResponseAssertion guiclass="AssertionGui" testclass="ResponseAssertion" testname="Text Assertion - Homepage Content">
+            <collectionProp name="Asserion.test_strings">
+              <stringProp name="-680176080">PRODUCT STORE</stringProp>
+            </collectionProp>
+            <stringProp name="Assertion.custom_message">Homepage response does not contain &apos;PRODUCT STORE&apos; under medium load (150 users).</stringProp>
+            <stringProp name="Assertion.test_field">Assertion.response_data</stringProp>
+            <boolProp name="Assertion.assume_success">false</boolProp>
+            <intProp name="Assertion.test_type">2</intProp>
+            <stringProp name="TestPlan.comments">Validates homepage content is correctly served under 150 concurrent users.</stringProp>
+          </ResponseAssertion>
+          <hashTree/>
+          <DurationAssertion guiclass="DurationAssertionGui" testclass="DurationAssertion" testname="Duration Assertion - 2000ms">
+            <stringProp name="DurationAssertion.duration">2000</stringProp>
+            <stringProp name="TestPlan.comments">Validates homepage responds within 2000ms under medium load (150 users).</stringProp>
+          </DurationAssertion>
+          <hashTree/>
+          <GaussianRandomTimer guiclass="GaussianRandomTimerGui" testclass="GaussianRandomTimer" testname="Gaussian Random Timer">
+            <stringProp name="ConstantTimer.delay">1000</stringProp>
+            <stringProp name="RandomTimer.range">3000</stringProp>
+            <stringProp name="TestPlan.comments">Think time between homepage and login for medium load users.</stringProp>
+          </GaussianRandomTimer>
+          <hashTree/>
+        </hashTree>
+        <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="HTTP Request (POST-Login)">
+          <stringProp name="TestPlan.comments">Login request for 150 concurrent users. Authentication under concurrent load stresses password hashing CPU cycles and session store writes. The ${auth_token} extracted here is used in the Add to Cart and Checkout steps below.</stringProp>
+          <stringProp name="HTTPSampler.domain">api.demoblaze.com</stringProp>
+          <stringProp name="HTTPSampler.protocol">https</stringProp>
+          <stringProp name="HTTPSampler.path">/login</stringProp>
+          <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
+          <stringProp name="HTTPSampler.method">POST</stringProp>
+          <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
+          <boolProp name="HTTPSampler.postBodyRaw">true</boolProp>
+          <elementProp name="HTTPsampler.Arguments" elementType="Arguments">
+            <collectionProp name="Arguments.arguments">
+              <elementProp name="" elementType="HTTPArgument">
+                <boolProp name="HTTPArgument.always_encode">false</boolProp>
+                <stringProp name="Argument.value">{&quot;username&quot;:&quot;Joojo Killer&quot;, &quot;password&quot;:&quot;123456789&quot;}</stringProp>
+                <stringProp name="Argument.metadata">=</stringProp>
+              </elementProp>
+            </collectionProp>
+          </elementProp>
+        </HTTPSamplerProxy>
+        <hashTree>
+          <ResponseAssertion guiclass="AssertionGui" testclass="ResponseAssertion" testname="Status Code Assertion - 200">
+            <collectionProp name="Asserion.test_strings">
+              <stringProp name="49586">200</stringProp>
+            </collectionProp>
+            <stringProp name="Assertion.custom_message">Login did not return HTTP 200 OK under medium load (150 users). Auth failures will cascade to Add to Cart and Checkout.</stringProp>
+            <stringProp name="Assertion.test_field">Assertion.response_code</stringProp>
+            <boolProp name="Assertion.assume_success">false</boolProp>
+            <intProp name="Assertion.test_type">16</intProp>
+            <stringProp name="TestPlan.comments">Validates login returns HTTP 200 OK under 150 concurrent users.</stringProp>
+          </ResponseAssertion>
+          <hashTree/>
+          <ResponseAssertion guiclass="AssertionGui" testclass="ResponseAssertion" testname="Text Assertion - Auth Token Present">
+            <collectionProp name="Asserion.test_strings">
+              <stringProp name="36698306">Auth_token</stringProp>
+            </collectionProp>
+            <stringProp name="Assertion.custom_message">Login response does not contain &apos;Auth_token&apos; under medium load. Downstream authenticated steps will fail.</stringProp>
+            <stringProp name="Assertion.test_field">Assertion.response_data</stringProp>
+            <boolProp name="Assertion.assume_success">false</boolProp>
+            <intProp name="Assertion.test_type">2</intProp>
+            <stringProp name="TestPlan.comments">Validates auth token is present in the login response under 150 concurrent users.</stringProp>
+          </ResponseAssertion>
+          <hashTree/>
+          <DurationAssertion guiclass="DurationAssertionGui" testclass="DurationAssertion" testname="Duration Assertion - 2000ms">
+            <stringProp name="DurationAssertion.duration">2000</stringProp>
+            <stringProp name="TestPlan.comments">Validates login responds within 2000ms under medium load (150 users).</stringProp>
+          </DurationAssertion>
+          <hashTree/>
+          <RegexExtractor guiclass="RegexExtractorGui" testclass="RegexExtractor" testname="Regex Extractor - Auth Token">
+            <stringProp name="RegexExtractor.useHeaders">false</stringProp>
+            <stringProp name="RegexExtractor.refname">auth_token</stringProp>
+            <stringProp name="RegexExtractor.regex">Auth_token: (.+?)&quot;</stringProp>
+            <stringProp name="RegexExtractor.template">$1$</stringProp>
+            <stringProp name="RegexExtractor.default">NOT_FOUND</stringProp>
+            <stringProp name="RegexExtractor.match_no">1</stringProp>
+            <stringProp name="TestPlan.comments">Extracts auth token from login response body under medium load. Each of the 150 virtual user threads gets its own thread-local ${auth_token} variable. Extraction failures produce the default &apos;NOT_FOUND&apos; value, intentionally failing downstream cart and checkout steps to surface the login issue in the report.</stringProp>
+            <boolProp name="RegexExtractor.default_empty_value">false</boolProp>
+            <stringProp name="RegexExtractor.match_number"></stringProp>
+          </RegexExtractor>
+          <hashTree/>
+          <GaussianRandomTimer guiclass="GaussianRandomTimerGui" testclass="GaussianRandomTimer" testname="Gaussian Random Timer" enabled="true">
+            <stringProp name="ConstantTimer.delay">1000</stringProp>
+            <stringProp name="RandomTimer.range">3000</stringProp>
+            <stringProp name="TestPlan.comments">Think time after login before product browsing for medium load users.</stringProp>
+          </GaussianRandomTimer>
+          <hashTree/>
+        </hashTree>
+        <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="HTTP Request (POST-ProductSearch)">
+          <stringProp name="TestPlan.comments"> Product search request for 150 concurrent users. Concurrent database read queries begin to show contention at this user count. Compare 90th percentile response times against the LightLoad baseline.</stringProp>
+          <stringProp name="HTTPSampler.domain">api.demoblaze.com</stringProp>
+          <stringProp name="HTTPSampler.path">/bycat</stringProp>
+          <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
+          <stringProp name="HTTPSampler.method">POST</stringProp>
+          <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
+          <boolProp name="HTTPSampler.postBodyRaw">true</boolProp>
+          <elementProp name="HTTPsampler.Arguments" elementType="Arguments">
+            <collectionProp name="Arguments.arguments">
+              <elementProp name="" elementType="HTTPArgument">
+                <boolProp name="HTTPArgument.always_encode">false</boolProp>
+                <stringProp name="Argument.value">{&quot;cat&quot;:&quot;phone&quot;}</stringProp>
+                <stringProp name="Argument.metadata">=</stringProp>
+              </elementProp>
+            </collectionProp>
+          </elementProp>
+        </HTTPSamplerProxy>
+        <hashTree>
+          <ResponseAssertion guiclass="AssertionGui" testclass="ResponseAssertion" testname="Status Code Assertion - 200">
+            <collectionProp name="Asserion.test_strings">
+              <stringProp name="49586">200</stringProp>
+            </collectionProp>
+            <stringProp name="Assertion.custom_message">Product Search did not return HTTP 200 OK under medium load (150 users).</stringProp>
+            <stringProp name="Assertion.test_field">Assertion.response_code</stringProp>
+            <boolProp name="Assertion.assume_success">false</boolProp>
+            <intProp name="Assertion.test_type">16</intProp>
+            <stringProp name="TestPlan.comments">Validates product search returns HTTP 200 OK under 150 concurrent users.</stringProp>
+          </ResponseAssertion>
+          <hashTree/>
+          <ResponseAssertion guiclass="AssertionGui" testclass="ResponseAssertion" testname="Text Assertion - Product Items Present">
+            <collectionProp name="Asserion.test_strings">
+              <stringProp name="70973344">Items</stringProp>
+            </collectionProp>
+            <stringProp name="Assertion.custom_message">Product Search response does not contain &apos;Items&apos; under medium load — data may be incomplete.</stringProp>
+            <stringProp name="Assertion.test_field">Assertion.response_data</stringProp>
+            <boolProp name="Assertion.assume_success">false</boolProp>
+            <intProp name="Assertion.test_type">2</intProp>
+            <stringProp name="TestPlan.comments">Validates product listing contains the Items key under 150 concurrent users.</stringProp>
+          </ResponseAssertion>
+          <hashTree/>
+          <DurationAssertion guiclass="DurationAssertionGui" testclass="DurationAssertion" testname="Duration Assertion - 2000ms">
+            <stringProp name="DurationAssertion.duration">2000</stringProp>
+            <stringProp name="TestPlan.comments">Validates product search responds within 2000ms under medium load (150 users).</stringProp>
+          </DurationAssertion>
+          <hashTree/>
+          <GaussianRandomTimer guiclass="GaussianRandomTimerGui" testclass="GaussianRandomTimer" testname="Gaussian Random Timer">
+            <stringProp name="ConstantTimer.delay">1000</stringProp>
+            <stringProp name="RandomTimer.range">3000</stringProp>
+            <stringProp name="TestPlan.comments">Think time after product listing before selecting a product under medium load.</stringProp>
+          </GaussianRandomTimer>
+          <hashTree/>
+          <RegexExtractor guiclass="RegexExtractorGui" testclass="RegexExtractor" testname="Regex Extractor - Product ID" enabled="true">
+            <stringProp name="RegexExtractor.useHeaders">false</stringProp>
+            <stringProp name="RegexExtractor.refname">PRODUCT_ID</stringProp>
+            <stringProp name="RegexExtractor.regex">&quot;id&quot;:([0-9]+)</stringProp>
+            <stringProp name="RegexExtractor.template">$1$</stringProp>
+            <stringProp name="RegexExtractor.default">1</stringProp>
+            <boolProp name="RegexExtractor.default_empty_value">false</boolProp>
+            <stringProp name="RegexExtractor.match_number"></stringProp>
+          </RegexExtractor>
+          <hashTree/>
+        </hashTree>
+        <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="HTTP Request (GET-ProductDetails)">
+          <stringProp name="TestPlan.comments">Product details page request for 150 concurrent users.</stringProp>
+          <stringProp name="HTTPSampler.domain">www.demoblaze.com</stringProp>
+          <stringProp name="HTTPSampler.path">/prod.html</stringProp>
+          <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
+          <stringProp name="HTTPSampler.method">GET</stringProp>
+          <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
+          <boolProp name="HTTPSampler.postBodyRaw">false</boolProp>
+          <elementProp name="HTTPsampler.Arguments" elementType="Arguments" guiclass="HTTPArgumentsPanel" testclass="Arguments" testname="User Defined Variables">
+            <collectionProp name="Arguments.arguments">
+              <elementProp name="idp_" elementType="HTTPArgument">
+                <boolProp name="HTTPArgument.always_encode">false</boolProp>
+                <stringProp name="Argument.value">1</stringProp>
+                <stringProp name="Argument.metadata">=</stringProp>
+                <boolProp name="HTTPArgument.use_equals">true</boolProp>
+                <stringProp name="Argument.name">idp_</stringProp>
+              </elementProp>
+            </collectionProp>
+          </elementProp>
+        </HTTPSamplerProxy>
+        <hashTree>
+          <ResponseAssertion guiclass="AssertionGui" testclass="ResponseAssertion" testname="Status Code Assertion - 200">
+            <collectionProp name="Asserion.test_strings">
+              <stringProp name="49586">200</stringProp>
+            </collectionProp>
+            <stringProp name="Assertion.custom_message">Product Details page did not return HTTP 200 OK under medium load (150 users).</stringProp>
+            <stringProp name="Assertion.test_field">Assertion.response_code</stringProp>
+            <boolProp name="Assertion.assume_success">false</boolProp>
+            <intProp name="Assertion.test_type">16</intProp>
+            <stringProp name="TestPlan.comments">Validates product details page returns HTTP 200 OK under 150 concurrent users.</stringProp>
+          </ResponseAssertion>
+          <hashTree/>
+          <ResponseAssertion guiclass="AssertionGui" testclass="ResponseAssertion" testname="Text Assertion - Add to Cart Button Present">
+            <collectionProp name="Asserion.test_strings">
+              <stringProp name="-649020154">Add to cart</stringProp>
+            </collectionProp>
+            <stringProp name="Assertion.custom_message">Product Details page does not contain &apos;Add to cart&apos; under medium load (150 users).</stringProp>
+            <stringProp name="Assertion.test_field">Assertion.response_data</stringProp>
+            <boolProp name="Assertion.assume_success">false</boolProp>
+            <intProp name="Assertion.test_type">2</intProp>
+            <stringProp name="TestPlan.comments">Validates product details page renders correctly under 150 concurrent users.</stringProp>
+          </ResponseAssertion>
+          <hashTree/>
+          <DurationAssertion guiclass="DurationAssertionGui" testclass="DurationAssertion" testname="Duration Assertion - 2000ms">
+            <stringProp name="DurationAssertion.duration">2000</stringProp>
+            <stringProp name="TestPlan.comments">Validates product details page loads within 2000ms under medium load (150 users).</stringProp>
+          </DurationAssertion>
+          <hashTree/>
+          <GaussianRandomTimer guiclass="GaussianRandomTimerGui" testclass="GaussianRandomTimer" testname="Gaussian Random Timer">
+            <stringProp name="ConstantTimer.delay">2000</stringProp>
+            <stringProp name="RandomTimer.range">3000</stringProp>
+            <stringProp name="TestPlan.comments">Think time on the product details page under medium load before adding to cart.</stringProp>
+          </GaussianRandomTimer>
+          <hashTree/>
+        </hashTree>
+        <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="HTTP Request (POST-AddToCart)">
+          <stringProp name="TestPlan.comments">Add to Cart for 150 concurrent users. Concurrent write operations to the cart database table are a common bottleneck. Increased latency here compared to LightLoad signals database write contention or connection pool saturation.</stringProp>
+          <stringProp name="HTTPSampler.domain">api.demoblaze.com</stringProp>
+          <stringProp name="HTTPSampler.path">/addtocart</stringProp>
+          <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
+          <stringProp name="HTTPSampler.method">POST</stringProp>
+          <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
+          <boolProp name="HTTPSampler.postBodyRaw">true</boolProp>
+          <elementProp name="HTTPsampler.Arguments" elementType="Arguments">
+            <collectionProp name="Arguments.arguments">
+              <elementProp name="" elementType="HTTPArgument">
+                <boolProp name="HTTPArgument.always_encode">false</boolProp>
+                <stringProp name="Argument.value">{&quot;id&quot;:&quot;1&quot;,&quot;cookie&quot;:&quot;Joojo Killer&quot;,&quot;prod_id&quot;:${PRODUCT_ID},&quot;flag&quot;:true}</stringProp>
+                <stringProp name="Argument.metadata">=</stringProp>
+              </elementProp>
+            </collectionProp>
+          </elementProp>
+        </HTTPSamplerProxy>
+        <hashTree>
+          <ResponseAssertion guiclass="AssertionGui" testclass="ResponseAssertion" testname="Status Code Assertion - 200">
+            <collectionProp name="Asserion.test_strings">
+              <stringProp name="49586">200</stringProp>
+            </collectionProp>
+            <stringProp name="Assertion.custom_message">Add to Cart did not return HTTP 200 OK under medium load (150 users). Possible database write contention.</stringProp>
+            <stringProp name="Assertion.test_field">Assertion.response_code</stringProp>
+            <boolProp name="Assertion.assume_success">false</boolProp>
+            <intProp name="Assertion.test_type">16</intProp>
+            <stringProp name="TestPlan.comments">Validates Add to Cart returns HTTP 200 OK under 150 concurrent users.</stringProp>
+          </ResponseAssertion>
+          <hashTree/>
+          <DurationAssertion guiclass="DurationAssertionGui" testclass="DurationAssertion" testname="Duration Assertion - 2000ms">
+            <stringProp name="DurationAssertion.duration">2000</stringProp>
+            <stringProp name="TestPlan.comments">Validates Add to Cart completes within 2000ms under medium load (150 users).</stringProp>
+          </DurationAssertion>
+          <hashTree/>
+          <GaussianRandomTimer guiclass="GaussianRandomTimerGui" testclass="GaussianRandomTimer" testname="Gaussian Random Timer">
+            <stringProp name="ConstantTimer.delay">1000</stringProp>
+            <stringProp name="RandomTimer.range">2000</stringProp>
+            <stringProp name="TestPlan.comments">Think time after adding to cart before proceeding to checkout under medium load.</stringProp>
+          </GaussianRandomTimer>
+          <hashTree/>
+        </hashTree>
+        <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="HTTP Request (POST-Checkout)">
+          <stringProp name="TestPlan.comments"> Checkout (Place Order) for 150 concurrent users. 150 simultaneous order placements is the most stress this test phase places on the database write path. Error rates above 1% here breach the project performance goal and must be flagged as a critical finding in the test report.</stringProp>
+          <stringProp name="HTTPSampler.domain">api.demoblaze.com</stringProp>
+          <stringProp name="HTTPSampler.path">/send</stringProp>
+          <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
+          <stringProp name="HTTPSampler.method">POST</stringProp>
+          <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
+          <boolProp name="HTTPSampler.postBodyRaw">true</boolProp>
+          <elementProp name="HTTPsampler.Arguments" elementType="Arguments">
+            <collectionProp name="Arguments.arguments">
+              <elementProp name="" elementType="HTTPArgument">
+                <boolProp name="HTTPArgument.always_encode">false</boolProp>
+                <stringProp name="Argument.value">{&quot;cookie&quot;:&quot;Joojo Killer&quot;}</stringProp>
+                <stringProp name="Argument.metadata">=</stringProp>
+              </elementProp>
+            </collectionProp>
+          </elementProp>
+        </HTTPSamplerProxy>
+        <hashTree>
+          <ResponseAssertion guiclass="AssertionGui" testclass="ResponseAssertion" testname="Status Code Assertion - 200">
+            <collectionProp name="Asserion.test_strings">
+              <stringProp name="49586">200</stringProp>
+            </collectionProp>
+            <stringProp name="Assertion.custom_message">Checkout did not return HTTP 200 OK under medium load (150 users). Orders are being dropped — this breaches the 1% error rate requirement.</stringProp>
+            <stringProp name="Assertion.test_field">Assertion.response_code</stringProp>
+            <boolProp name="Assertion.assume_success">false</boolProp>
+            <intProp name="Assertion.test_type">16</intProp>
+            <stringProp name="TestPlan.comments">Validates Checkout returns HTTP 200 OK under 150 concurrent users. Failure rate above 1% is a critical performance finding.</stringProp>
+          </ResponseAssertion>
+          <hashTree/>
+          <DurationAssertion guiclass="DurationAssertionGui" testclass="DurationAssertion" testname="Duration Assertion - 2000ms">
+            <stringProp name="DurationAssertion.duration">2000</stringProp>
+            <stringProp name="TestPlan.comments">Validates Checkout completes within 2000ms under medium load (150 users).</stringProp>
+          </DurationAssertion>
+          <hashTree/>
+          <GaussianRandomTimer guiclass="GaussianRandomTimerGui" testclass="GaussianRandomTimer" testname="Gaussian Random Timer">
+            <stringProp name="ConstantTimer.delay">1000</stringProp>
+            <stringProp name="RandomTimer.range">2000</stringProp>
+            <stringProp name="TestPlan.comments">Think time after checkout — user reads order confirmation before session ends.</stringProp>
+          </GaussianRandomTimer>
+          <hashTree/>
+        </hashTree>
+      </hashTree>
+      <ThreadGroup guiclass="ThreadGroupGui" testclass="ThreadGroup" testname="PeakLoad Test" enabled="false">
+        <stringProp name="TestPlan.comments"> Peak load thread group simulating 300 concurrent users; the maximum expected production load. Ramp-up of 300 seconds (1 user/sec) provides a gradual increase to avoid artificial spikes. Each user completes 3 loops of the full user journey. The full request flow has been added to this group (it previously only contained the Homepage request). This is the primary load test scenario and results here determine whether the application meets the defined performance goals at peak traffic. </stringProp>
+        <intProp name="ThreadGroup.num_threads">300</intProp>
+        <intProp name="ThreadGroup.ramp_time">300</intProp>
+        <boolProp name="ThreadGroup.same_user_on_next_iteration">true</boolProp>
+        <stringProp name="ThreadGroup.on_sample_error">continue</stringProp>
+        <elementProp name="ThreadGroup.main_controller" elementType="LoopController" guiclass="LoopControlPanel" testclass="LoopController" testname="Loop Controller">
+          <stringProp name="LoopController.loops">3</stringProp>
+          <boolProp name="LoopController.continue_forever">false</boolProp>
+        </elementProp>
+      </ThreadGroup>
+      <hashTree>
+        <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="HTTP Request (GET-Homepage)">
+          <stringProp name="TestPlan.comments"> Homepage request for 300 concurrent users. This is the maximum expected production load. Degradation at this level means the application cannot meet its production SLAs during peak traffic periods.</stringProp>
+          <stringProp name="HTTPSampler.domain">www.demoblaze.com</stringProp>
+          <stringProp name="HTTPSampler.path">/index.html</stringProp>
+          <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
+          <stringProp name="HTTPSampler.method">GET</stringProp>
+          <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
+          <boolProp name="HTTPSampler.postBodyRaw">false</boolProp>
+          <elementProp name="HTTPsampler.Arguments" elementType="Arguments" guiclass="HTTPArgumentsPanel" testclass="Arguments" testname="User Defined Variables">
+            <collectionProp name="Arguments.arguments"/>
+          </elementProp>
+        </HTTPSamplerProxy>
+        <hashTree>
+          <ResponseAssertion guiclass="AssertionGui" testclass="ResponseAssertion" testname="Status Code Assertion - 200">
+            <collectionProp name="Asserion.test_strings">
+              <stringProp name="49586">200</stringProp>
+            </collectionProp>
+            <stringProp name="Assertion.custom_message">Homepage did not return HTTP 200 OK under peak load (300 users).</stringProp>
+            <stringProp name="Assertion.test_field">Assertion.response_code</stringProp>
+            <boolProp name="Assertion.assume_success">false</boolProp>
+            <intProp name="Assertion.test_type">16</intProp>
+            <stringProp name="TestPlan.comments">Validates homepage returns HTTP 200 OK under the peak production load of 300 concurrent users.</stringProp>
+          </ResponseAssertion>
+          <hashTree/>
+          <ResponseAssertion guiclass="AssertionGui" testclass="ResponseAssertion" testname="Text Assertion - Homepage Content">
+            <collectionProp name="Asserion.test_strings">
+              <stringProp name="-680176080">PRODUCT STORE</stringProp>
+            </collectionProp>
+            <stringProp name="Assertion.custom_message">Homepage response does not contain &apos;PRODUCT STORE&apos; under peak load (300 users).</stringProp>
+            <stringProp name="Assertion.test_field">Assertion.response_data</stringProp>
+            <boolProp name="Assertion.assume_success">false</boolProp>
+            <intProp name="Assertion.test_type">2</intProp>
+            <stringProp name="TestPlan.comments">Validates homepage content is correctly served under peak load of 300 concurrent users.</stringProp>
+          </ResponseAssertion>
+          <hashTree/>
+          <DurationAssertion guiclass="DurationAssertionGui" testclass="DurationAssertion" testname="Duration Assertion - 2000ms">
+            <stringProp name="DurationAssertion.duration">2000</stringProp>
+            <stringProp name="TestPlan.comments">Validates homepage responds within 2000ms under peak load (300 users).</stringProp>
+          </DurationAssertion>
+          <hashTree/>
+          <GaussianRandomTimer guiclass="GaussianRandomTimerGui" testclass="GaussianRandomTimer" testname="Gaussian Random Timer">
+            <stringProp name="ConstantTimer.delay">1000</stringProp>
+            <stringProp name="RandomTimer.range">3000</stringProp>
+            <stringProp name="TestPlan.comments">Think time between homepage and login for peak load users.</stringProp>
+          </GaussianRandomTimer>
+          <hashTree/>
+        </hashTree>
+        <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="HTTP Request (POST-Login)">
+          <stringProp name="TestPlan.comments"> Login for 300 concurrent users. At this load, the authentication service is under significant stress. The ${auth_token} is extracted from each response for use in the authenticated downstream steps.</stringProp>
+          <stringProp name="HTTPSampler.domain">api.demoblaze.com</stringProp>
+          <stringProp name="HTTPSampler.protocol">https</stringProp>
+          <stringProp name="HTTPSampler.path">/login</stringProp>
+          <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
+          <stringProp name="HTTPSampler.method">POST</stringProp>
+          <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
+          <boolProp name="HTTPSampler.postBodyRaw">true</boolProp>
+          <elementProp name="HTTPsampler.Arguments" elementType="Arguments">
+            <collectionProp name="Arguments.arguments">
+              <elementProp name="" elementType="HTTPArgument">
+                <boolProp name="HTTPArgument.always_encode">false</boolProp>
+                <stringProp name="Argument.value">{&quot;username&quot;:&quot;Joojo Killer&quot;, &quot;password&quot;:&quot;123456789&quot;}</stringProp>
+                <stringProp name="Argument.metadata">=</stringProp>
+              </elementProp>
+            </collectionProp>
+          </elementProp>
+        </HTTPSamplerProxy>
+        <hashTree>
+          <ResponseAssertion guiclass="AssertionGui" testclass="ResponseAssertion" testname="Status Code Assertion - 200">
+            <collectionProp name="Asserion.test_strings">
+              <stringProp name="49586">200</stringProp>
+            </collectionProp>
+            <stringProp name="Assertion.custom_message">Login did not return HTTP 200 OK under peak load (300 users).</stringProp>
+            <stringProp name="Assertion.test_field">Assertion.response_code</stringProp>
+            <boolProp name="Assertion.assume_success">false</boolProp>
+            <intProp name="Assertion.test_type">16</intProp>
+            <stringProp name="TestPlan.comments">Validates login returns HTTP 200 OK under peak load of 300 concurrent users.</stringProp>
+          </ResponseAssertion>
+          <hashTree/>
+          <ResponseAssertion guiclass="AssertionGui" testclass="ResponseAssertion" testname="Text Assertion - Auth Token Present">
+            <collectionProp name="Asserion.test_strings">
+              <stringProp name="36698306">Auth_token</stringProp>
+            </collectionProp>
+            <stringProp name="Assertion.custom_message">Login response does not contain &apos;Auth_token&apos; under peak load (300 users).</stringProp>
+            <stringProp name="Assertion.test_field">Assertion.response_data</stringProp>
+            <boolProp name="Assertion.assume_success">false</boolProp>
+            <intProp name="Assertion.test_type">2</intProp>
+            <stringProp name="TestPlan.comments">Validates auth token is present in login response under peak load of 300 users.</stringProp>
+          </ResponseAssertion>
+          <hashTree/>
+          <DurationAssertion guiclass="DurationAssertionGui" testclass="DurationAssertion" testname="Duration Assertion - 2000ms">
+            <stringProp name="DurationAssertion.duration">2000</stringProp>
+            <stringProp name="TestPlan.comments">Validates login responds within 2000ms under peak load (300 users).</stringProp>
+          </DurationAssertion>
+          <hashTree/>
+          <RegexExtractor guiclass="RegexExtractorGui" testclass="RegexExtractor" testname="Regex Extractor - Auth Token" enabled="true">
+            <stringProp name="RegexExtractor.useHeaders">false</stringProp>
+            <stringProp name="RegexExtractor.refname">auth_token</stringProp>
+            <stringProp name="RegexExtractor.regex">Auth_token: (.+?)&quot;</stringProp>
+            <stringProp name="RegexExtractor.template">$1$</stringProp>
+            <stringProp name="RegexExtractor.default">NOT_FOUND</stringProp>
+            <stringProp name="RegexExtractor.match_no">1</stringProp>
+            <stringProp name="TestPlan.comments">Extracts auth token from login response for each of the 300 virtual user threads under peak load. Each thread has its own ${auth_token} variable, ensuring thread isolation. Default value &apos;NOT_FOUND&apos; surfaces login failures in downstream steps.</stringProp>
+            <boolProp name="RegexExtractor.default_empty_value">false</boolProp>
+            <stringProp name="RegexExtractor.match_number"></stringProp>
+          </RegexExtractor>
+          <hashTree/>
+          <GaussianRandomTimer guiclass="GaussianRandomTimerGui" testclass="GaussianRandomTimer" testname="Gaussian Random Timer">
+            <stringProp name="ConstantTimer.delay">1000</stringProp>
+            <stringProp name="RandomTimer.range">3000</stringProp>
+            <stringProp name="TestPlan.comments">Think time after login before product browsing for peak load users.</stringProp>
+          </GaussianRandomTimer>
+          <hashTree/>
+        </hashTree>
+        <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="HTTP Request (POST-ProductSearch)">
+          <stringProp name="TestPlan.comments"> Product search for 300 concurrent users. At peak load, database read queries under 300 concurrent connections will clearly reveal whether connection pooling and query caching are sufficient for production traffic.</stringProp>
+          <stringProp name="HTTPSampler.domain">api.demoblaze.com</stringProp>
+          <stringProp name="HTTPSampler.path">/bycat</stringProp>
+          <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
+          <stringProp name="HTTPSampler.method">POST</stringProp>
+          <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
+          <boolProp name="HTTPSampler.postBodyRaw">true</boolProp>
+          <elementProp name="HTTPsampler.Arguments" elementType="Arguments">
+            <collectionProp name="Arguments.arguments">
+              <elementProp name="" elementType="HTTPArgument">
+                <boolProp name="HTTPArgument.always_encode">false</boolProp>
+                <stringProp name="Argument.value">{&quot;cat&quot;:&quot;phone&quot;}</stringProp>
+                <stringProp name="Argument.metadata">=</stringProp>
+              </elementProp>
+            </collectionProp>
+          </elementProp>
+        </HTTPSamplerProxy>
+        <hashTree>
+          <ResponseAssertion guiclass="AssertionGui" testclass="ResponseAssertion" testname="Status Code Assertion - 200" enabled="true">
+            <collectionProp name="Asserion.test_strings">
+              <stringProp name="49586">200</stringProp>
+            </collectionProp>
+            <stringProp name="Assertion.custom_message">Product Search did not return HTTP 200 OK under peak load (300 users).</stringProp>
+            <stringProp name="Assertion.test_field">Assertion.response_code</stringProp>
+            <boolProp name="Assertion.assume_success">false</boolProp>
+            <intProp name="Assertion.test_type">16</intProp>
+            <stringProp name="TestPlan.comments">Validates product search returns HTTP 200 OK under peak load of 300 concurrent users.</stringProp>
+          </ResponseAssertion>
+          <hashTree/>
+          <ResponseAssertion guiclass="AssertionGui" testclass="ResponseAssertion" testname="Text Assertion - Product Items Present" enabled="true">
+            <collectionProp name="Asserion.test_strings">
+              <stringProp name="70973344">Items</stringProp>
+            </collectionProp>
+            <stringProp name="Assertion.custom_message">Product Search response does not contain &apos;Items&apos; under peak load (300 users).</stringProp>
+            <stringProp name="Assertion.test_field">Assertion.response_data</stringProp>
+            <boolProp name="Assertion.assume_success">false</boolProp>
+            <intProp name="Assertion.test_type">2</intProp>
+            <stringProp name="TestPlan.comments">Validates product listing returns valid Items data under peak load of 300 users.</stringProp>
+          </ResponseAssertion>
+          <hashTree/>
+          <DurationAssertion guiclass="DurationAssertionGui" testclass="DurationAssertion" testname="Duration Assertion - 2000ms" enabled="true">
+            <stringProp name="DurationAssertion.duration">2000</stringProp>
+            <stringProp name="TestPlan.comments">Validates product search responds within 2000ms under peak load (300 users).</stringProp>
+          </DurationAssertion>
+          <hashTree/>
+          <GaussianRandomTimer guiclass="GaussianRandomTimerGui" testclass="GaussianRandomTimer" testname="Gaussian Random Timer" enabled="true">
+            <stringProp name="ConstantTimer.delay">1000</stringProp>
+            <stringProp name="RandomTimer.range">3000</stringProp>
+            <stringProp name="TestPlan.comments">Think time after product listing before selecting a product under peak load.</stringProp>
+          </GaussianRandomTimer>
+          <hashTree/>
+          <RegexExtractor guiclass="RegexExtractorGui" testclass="RegexExtractor" testname="Regex Extractor - Product ID" enabled="true">
+            <stringProp name="RegexExtractor.useHeaders">false</stringProp>
+            <stringProp name="RegexExtractor.refname">PRODUCT_ID</stringProp>
+            <stringProp name="RegexExtractor.regex">&quot;id&quot;:([0-9]+)</stringProp>
+            <stringProp name="RegexExtractor.template">$1$</stringProp>
+            <stringProp name="RegexExtractor.default">1</stringProp>
+            <boolProp name="RegexExtractor.default_empty_value">false</boolProp>
+            <stringProp name="RegexExtractor.match_number"></stringProp>
+          </RegexExtractor>
+          <hashTree/>
+        </hashTree>
+        <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="HTTP Request (GET-ProductDetails)">
+          <stringProp name="TestPlan.comments"> Product details page for 300 concurrent users.</stringProp>
+          <stringProp name="HTTPSampler.domain">www.demoblaze.com</stringProp>
+          <stringProp name="HTTPSampler.path">/prod.html</stringProp>
+          <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
+          <stringProp name="HTTPSampler.method">GET</stringProp>
+          <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
+          <boolProp name="HTTPSampler.postBodyRaw">false</boolProp>
+          <elementProp name="HTTPsampler.Arguments" elementType="Arguments" guiclass="HTTPArgumentsPanel" testclass="Arguments" testname="User Defined Variables">
+            <collectionProp name="Arguments.arguments">
+              <elementProp name="idp_" elementType="HTTPArgument">
+                <boolProp name="HTTPArgument.always_encode">false</boolProp>
+                <stringProp name="Argument.value">1</stringProp>
+                <stringProp name="Argument.metadata">=</stringProp>
+                <boolProp name="HTTPArgument.use_equals">true</boolProp>
+                <stringProp name="Argument.name">idp_</stringProp>
+              </elementProp>
+            </collectionProp>
+          </elementProp>
+        </HTTPSamplerProxy>
+        <hashTree>
+          <ResponseAssertion guiclass="AssertionGui" testclass="ResponseAssertion" testname="Status Code Assertion - 200" enabled="true">
+            <collectionProp name="Asserion.test_strings">
+              <stringProp name="49586">200</stringProp>
+            </collectionProp>
+            <stringProp name="Assertion.custom_message">Product Details page did not return HTTP 200 OK under peak load (300 users).</stringProp>
+            <stringProp name="Assertion.test_field">Assertion.response_code</stringProp>
+            <boolProp name="Assertion.assume_success">false</boolProp>
+            <intProp name="Assertion.test_type">16</intProp>
+            <stringProp name="TestPlan.comments">Validates product details page returns HTTP 200 OK under peak load of 300 concurrent users.</stringProp>
+          </ResponseAssertion>
+          <hashTree/>
+          <ResponseAssertion guiclass="AssertionGui" testclass="ResponseAssertion" testname="Text Assertion - Add to Cart Button Present" enabled="true">
+            <collectionProp name="Asserion.test_strings">
+              <stringProp name="-649020154">Add to cart</stringProp>
+            </collectionProp>
+            <stringProp name="Assertion.custom_message">Product Details page does not contain &apos;Add to cart&apos; under peak load (300 users).</stringProp>
+            <stringProp name="Assertion.test_field">Assertion.response_data</stringProp>
+            <boolProp name="Assertion.assume_success">false</boolProp>
+            <intProp name="Assertion.test_type">2</intProp>
+            <stringProp name="TestPlan.comments">Validates product details page renders correctly under peak load of 300 users.</stringProp>
+          </ResponseAssertion>
+          <hashTree/>
+          <DurationAssertion guiclass="DurationAssertionGui" testclass="DurationAssertion" testname="Duration Assertion - 2000ms" enabled="true">
+            <stringProp name="DurationAssertion.duration">2000</stringProp>
+            <stringProp name="TestPlan.comments">Validates product details page loads within 2000ms under peak load (300 users).</stringProp>
+          </DurationAssertion>
+          <hashTree/>
+          <GaussianRandomTimer guiclass="GaussianRandomTimerGui" testclass="GaussianRandomTimer" testname="Gaussian Random Timer" enabled="true">
+            <stringProp name="ConstantTimer.delay">2000</stringProp>
+            <stringProp name="RandomTimer.range">3000</stringProp>
+            <stringProp name="TestPlan.comments">Think time on product details page before adding to cart under peak load.</stringProp>
+          </GaussianRandomTimer>
+          <hashTree/>
+        </hashTree>
+        <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="HTTP Request (POST-AddToCart)">
+          <stringProp name="TestPlan.comments"> Add to Cart for 300 concurrent users. This is a concurrent write stress scenario for the cart database table. Performance degradation here compared to LightLoad and MediumLoad quantifies the write scalability limit of the application.</stringProp>
+          <stringProp name="HTTPSampler.domain">api.demoblaze.com</stringProp>
+          <stringProp name="HTTPSampler.path">/addtocart</stringProp>
+          <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
+          <stringProp name="HTTPSampler.method">POST</stringProp>
+          <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
+          <boolProp name="HTTPSampler.postBodyRaw">true</boolProp>
+          <elementProp name="HTTPsampler.Arguments" elementType="Arguments">
+            <collectionProp name="Arguments.arguments">
+              <elementProp name="" elementType="HTTPArgument">
+                <boolProp name="HTTPArgument.always_encode">false</boolProp>
+                <stringProp name="Argument.value">{&quot;id&quot;:&quot;1&quot;,&quot;cookie&quot;:&quot;Joojo Killer&quot;,&quot;prod_id&quot;:${PRODUCT_ID},&quot;flag&quot;:true}</stringProp>
+                <stringProp name="Argument.metadata">=</stringProp>
+              </elementProp>
+            </collectionProp>
+          </elementProp>
+        </HTTPSamplerProxy>
+        <hashTree>
+          <ResponseAssertion guiclass="AssertionGui" testclass="ResponseAssertion" testname="Status Code Assertion - 200" enabled="true">
+            <collectionProp name="Asserion.test_strings">
+              <stringProp name="49586">200</stringProp>
+            </collectionProp>
+            <stringProp name="Assertion.custom_message">Add to Cart did not return HTTP 200 OK under peak load (300 users).</stringProp>
+            <stringProp name="Assertion.test_field">Assertion.response_code</stringProp>
+            <boolProp name="Assertion.assume_success">false</boolProp>
+            <intProp name="Assertion.test_type">16</intProp>
+            <stringProp name="TestPlan.comments">Validates Add to Cart returns HTTP 200 OK under peak load of 300 concurrent users.</stringProp>
+          </ResponseAssertion>
+          <hashTree/>
+          <DurationAssertion guiclass="DurationAssertionGui" testclass="DurationAssertion" testname="Duration Assertion - 2000ms" enabled="true">
+            <stringProp name="DurationAssertion.duration">2000</stringProp>
+            <stringProp name="TestPlan.comments">Validates Add to Cart completes within 2000ms under peak load (300 users).</stringProp>
+          </DurationAssertion>
+          <hashTree/>
+          <GaussianRandomTimer guiclass="GaussianRandomTimerGui" testclass="GaussianRandomTimer" testname="Gaussian Random Timer" enabled="true">
+            <stringProp name="ConstantTimer.delay">1000</stringProp>
+            <stringProp name="RandomTimer.range">2000</stringProp>
+            <stringProp name="TestPlan.comments">Think time after adding to cart before checkout under peak load.</stringProp>
+          </GaussianRandomTimer>
+          <hashTree/>
+        </hashTree>
+        <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="HTTP Request (POST-Checkout)">
+          <stringProp name="TestPlan.comments"> Checkout (Place Order) for 300 concurrent users. This is the maximum expected production checkout load. 300 simultaneous order submissions represent the most demanding scenario for the application&apos;s database write path. The per-endpoint error rate in the Aggregate Report for this sampler is the most important metric in the entire peak load test.</stringProp>
+          <stringProp name="HTTPSampler.domain">api.demoblaze.com</stringProp>
+          <stringProp name="HTTPSampler.path">/send</stringProp>
+          <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
+          <stringProp name="HTTPSampler.method">POST</stringProp>
+          <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
+          <boolProp name="HTTPSampler.postBodyRaw">true</boolProp>
+          <elementProp name="HTTPsampler.Arguments" elementType="Arguments">
+            <collectionProp name="Arguments.arguments">
+              <elementProp name="" elementType="HTTPArgument">
+                <boolProp name="HTTPArgument.always_encode">false</boolProp>
+                <stringProp name="Argument.value">{&quot;cookie&quot;:&quot;Joojo Killer&quot;}</stringProp>
+                <stringProp name="Argument.metadata">=</stringProp>
+              </elementProp>
+            </collectionProp>
+          </elementProp>
+        </HTTPSamplerProxy>
+        <hashTree>
+          <ResponseAssertion guiclass="AssertionGui" testclass="ResponseAssertion" testname="Status Code Assertion - 200" enabled="true">
+            <collectionProp name="Asserion.test_strings">
+              <stringProp name="49586">200</stringProp>
+            </collectionProp>
+            <stringProp name="Assertion.custom_message">Checkout did not return HTTP 200 OK under peak load (300 users). Application is failing to process orders at peak production traffic.</stringProp>
+            <stringProp name="Assertion.test_field">Assertion.response_code</stringProp>
+            <boolProp name="Assertion.assume_success">false</boolProp>
+            <intProp name="Assertion.test_type">16</intProp>
+            <stringProp name="TestPlan.comments">Validates Checkout returns HTTP 200 OK under peak load of 300 concurrent users. This is the ultimate pass/fail criterion for the peak load test — if checkout error rate exceeds 1%, the application fails to meet its production performance requirements.</stringProp>
+          </ResponseAssertion>
+          <hashTree/>
+          <DurationAssertion guiclass="DurationAssertionGui" testclass="DurationAssertion" testname="Duration Assertion - 2000ms" enabled="true">
+            <stringProp name="DurationAssertion.duration">2000</stringProp>
+            <stringProp name="TestPlan.comments">Validates Checkout completes within 2000ms under peak load (300 users).</stringProp>
+          </DurationAssertion>
+          <hashTree/>
+          <GaussianRandomTimer guiclass="GaussianRandomTimerGui" testclass="GaussianRandomTimer" testname="Gaussian Random Timer" enabled="true">
+            <stringProp name="ConstantTimer.delay">1000</stringProp>
+            <stringProp name="RandomTimer.range">2000</stringProp>
+            <stringProp name="TestPlan.comments">Think time after checkout under peak load — user reads order confirmation.</stringProp>
+          </GaussianRandomTimer>
+          <hashTree/>
+        </hashTree>
+      </hashTree>
+      <ThreadGroup guiclass="ThreadGroupGui" testclass="ThreadGroup" testname="Stress Test" enabled="false">
+        <stringProp name="TestPlan.comments">Stress test thread group pushing the application to 500 concurrent users , well beyond the 300-user peak load capacity. The goal of this test is NOT to pass all assertions (errors are expected) but to identify the breaking point: at what user count does the application begin to degrade significantly, and does it fail gracefully (returning meaningful error messages) or catastrophically (timeouts, crashes, unresponsive endpoints). The full request flow has been added to this group (it previously only contained the Homepage request). </stringProp>
+        <intProp name="ThreadGroup.num_threads">500</intProp>
+        <intProp name="ThreadGroup.ramp_time">500</intProp>
+        <boolProp name="ThreadGroup.same_user_on_next_iteration">true</boolProp>
+        <stringProp name="ThreadGroup.on_sample_error">continue</stringProp>
+        <elementProp name="ThreadGroup.main_controller" elementType="LoopController" guiclass="LoopControlPanel" testclass="LoopController" testname="Loop Controller">
+          <stringProp name="LoopController.loops">2</stringProp>
+          <boolProp name="LoopController.continue_forever">false</boolProp>
+        </elementProp>
+      </ThreadGroup>
+      <hashTree>
+        <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="HTTP Request (GET-Homepage)">
+          <stringProp name="TestPlan.comments"> Homepage request for 500 concurrent users. At this load, web server thread pool limits and connection queue depths become the primary constraints. High error rates or timeouts at this step indicate the server&apos;s maximum connection capacity has been reached.</stringProp>
+          <stringProp name="HTTPSampler.domain">www.demoblaze.com</stringProp>
+          <stringProp name="HTTPSampler.path">/index.html</stringProp>
+          <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
+          <stringProp name="HTTPSampler.method">GET</stringProp>
+          <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
+          <boolProp name="HTTPSampler.postBodyRaw">false</boolProp>
+          <elementProp name="HTTPsampler.Arguments" elementType="Arguments" guiclass="HTTPArgumentsPanel" testclass="Arguments" testname="User Defined Variables">
+            <collectionProp name="Arguments.arguments"/>
+          </elementProp>
+        </HTTPSamplerProxy>
+        <hashTree>
+          <ResponseAssertion guiclass="AssertionGui" testclass="ResponseAssertion" testname="Status Code Assertion - 200" enabled="true">
+            <collectionProp name="Asserion.test_strings">
+              <stringProp name="49586">200</stringProp>
+            </collectionProp>
+            <stringProp name="Assertion.custom_message">Homepage did not return HTTP 200 OK under stress load (500 users). The web server may have reached its connection limit.</stringProp>
+            <stringProp name="Assertion.test_field">Assertion.response_code</stringProp>
+            <boolProp name="Assertion.assume_success">false</boolProp>
+            <intProp name="Assertion.test_type">16</intProp>
+            <stringProp name="TestPlan.comments">Validates homepage under 500 concurrent users. Failures here are expected and informative — they indicate the exact load at which the web server is overwhelmed. Track the error rate trend as the 500 users ramp up to identify the breaking point threshold.</stringProp>
+          </ResponseAssertion>
+          <hashTree/>
+          <ResponseAssertion guiclass="AssertionGui" testclass="ResponseAssertion" testname="Text Assertion - Homepage Content" enabled="true">
+            <collectionProp name="Asserion.test_strings">
+              <stringProp name="-680176080">PRODUCT STORE</stringProp>
+            </collectionProp>
+            <stringProp name="Assertion.custom_message">Homepage response does not contain &apos;PRODUCT STORE&apos; under stress load (500 users).</stringProp>
+            <stringProp name="Assertion.test_field">Assertion.response_data</stringProp>
+            <boolProp name="Assertion.assume_success">false</boolProp>
+            <intProp name="Assertion.test_type">2</intProp>
+            <stringProp name="TestPlan.comments">Validates homepage content under stress load of 500 users. Failures reveal whether the server is returning partial responses or error pages when overloaded.</stringProp>
+          </ResponseAssertion>
+          <hashTree/>
+          <DurationAssertion guiclass="DurationAssertionGui" testclass="DurationAssertion" testname="Duration Assertion - 2000ms" enabled="true">
+            <stringProp name="DurationAssertion.duration">2000</stringProp>
+            <stringProp name="TestPlan.comments">Duration assertion under stress load (500 users). Failures here quantify how much response time degrades beyond the 2000ms SLA threshold as the server is pushed past capacity.</stringProp>
+          </DurationAssertion>
+          <hashTree/>
+          <GaussianRandomTimer guiclass="GaussianRandomTimerGui" testclass="GaussianRandomTimer" testname="Gaussian Random Timer" enabled="true">
+            <stringProp name="ConstantTimer.delay">1000</stringProp>
+            <stringProp name="RandomTimer.range">3000</stringProp>
+            <stringProp name="TestPlan.comments">Think time for stress test users — maintained to preserve realistic behaviour even at extreme load.</stringProp>
+          </GaussianRandomTimer>
+          <hashTree/>
+        </hashTree>
+        <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="HTTP Request (POST-Login)">
+          <stringProp name="TestPlan.comments"> Login for 500 concurrent users. The auth token extracted here is required for the Add to Cart and Checkout steps. Under extreme stress, login failures will be clearly visible as cascading errors across all authenticated downstream requests.</stringProp>
+          <stringProp name="HTTPSampler.domain">api.demoblaze.com</stringProp>
+          <stringProp name="HTTPSampler.protocol">https</stringProp>
+          <stringProp name="HTTPSampler.path">/login</stringProp>
+          <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
+          <stringProp name="HTTPSampler.method">POST</stringProp>
+          <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
+          <boolProp name="HTTPSampler.postBodyRaw">true</boolProp>
+          <elementProp name="HTTPsampler.Arguments" elementType="Arguments">
+            <collectionProp name="Arguments.arguments">
+              <elementProp name="" elementType="HTTPArgument">
+                <boolProp name="HTTPArgument.always_encode">false</boolProp>
+                <stringProp name="Argument.value">{&quot;username&quot;:&quot;Joojo Killer&quot;, &quot;password&quot;:&quot;123456789&quot;}</stringProp>
+                <stringProp name="Argument.metadata">=</stringProp>
+              </elementProp>
+            </collectionProp>
+          </elementProp>
+        </HTTPSamplerProxy>
+        <hashTree>
+          <ResponseAssertion guiclass="AssertionGui" testclass="ResponseAssertion" testname="Status Code Assertion - 200" enabled="true">
+            <collectionProp name="Asserion.test_strings">
+              <stringProp name="49586">200</stringProp>
+            </collectionProp>
+            <stringProp name="Assertion.custom_message">Login did not return HTTP 200 OK under stress load (500 users).</stringProp>
+            <stringProp name="Assertion.test_field">Assertion.response_code</stringProp>
+            <boolProp name="Assertion.assume_success">false</boolProp>
+            <intProp name="Assertion.test_type">16</intProp>
+            <stringProp name="TestPlan.comments">Validates login under 500 concurrent users. The error rate trend during ramp-up reveals the threshold at which the auth service becomes the bottleneck.</stringProp>
+          </ResponseAssertion>
+          <hashTree/>
+          <ResponseAssertion guiclass="AssertionGui" testclass="ResponseAssertion" testname="Text Assertion - Auth Token Present" enabled="true">
+            <collectionProp name="Asserion.test_strings">
+              <stringProp name="36698306">Auth_token</stringProp>
+            </collectionProp>
+            <stringProp name="Assertion.custom_message">Login response does not contain &apos;Auth_token&apos; under stress load (500 users).</stringProp>
+            <stringProp name="Assertion.test_field">Assertion.response_data</stringProp>
+            <boolProp name="Assertion.assume_success">false</boolProp>
+            <intProp name="Assertion.test_type">2</intProp>
+            <stringProp name="TestPlan.comments">Validates auth token in login response under stress load of 500 users.</stringProp>
+          </ResponseAssertion>
+          <hashTree/>
+          <DurationAssertion guiclass="DurationAssertionGui" testclass="DurationAssertion" testname="Duration Assertion - 2000ms" enabled="true">
+            <stringProp name="DurationAssertion.duration">2000</stringProp>
+            <stringProp name="TestPlan.comments">Duration assertion for login under stress load (500 users).</stringProp>
+          </DurationAssertion>
+          <hashTree/>
+          <RegexExtractor guiclass="RegexExtractorGui" testclass="RegexExtractor" testname="Regex Extractor - Auth Token" enabled="true">
+            <stringProp name="RegexExtractor.useHeaders">false</stringProp>
+            <stringProp name="RegexExtractor.refname">auth_token</stringProp>
+            <stringProp name="RegexExtractor.regex">Auth_token: (.+?)&quot;</stringProp>
+            <stringProp name="RegexExtractor.template">$1$</stringProp>
+            <stringProp name="RegexExtractor.default">NOT_FOUND</stringProp>
+            <stringProp name="RegexExtractor.match_no">1</stringProp>
+            <stringProp name="TestPlan.comments">Extracts auth token from login response under stress load. Under extreme concurrency, extraction failures (&apos;NOT_FOUND&apos;) will clearly surface in the Add to Cart and Checkout error rates, quantifying how many users are unable to complete authenticated actions at 500 concurrent users.</stringProp>
+            <boolProp name="RegexExtractor.default_empty_value">false</boolProp>
+            <stringProp name="RegexExtractor.match_number"></stringProp>
+          </RegexExtractor>
+          <hashTree/>
+          <GaussianRandomTimer guiclass="GaussianRandomTimerGui" testclass="GaussianRandomTimer" testname="Gaussian Random Timer" enabled="true">
+            <stringProp name="ConstantTimer.delay">1000</stringProp>
+            <stringProp name="RandomTimer.range">3000</stringProp>
+            <stringProp name="TestPlan.comments">Think time after login for stress test users.</stringProp>
+          </GaussianRandomTimer>
+          <hashTree/>
+        </hashTree>
+        <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="HTTP Request (POST-ProductSearch)">
+          <stringProp name="TestPlan.comments"> Product search for 500 concurrent users. At this extreme load, database read query queuing will expose connection pool limits and query timeout thresholds.</stringProp>
+          <stringProp name="HTTPSampler.domain">api.demoblaze.com</stringProp>
+          <stringProp name="HTTPSampler.path">/bycat</stringProp>
+          <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
+          <stringProp name="HTTPSampler.method">POST</stringProp>
+          <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
+          <boolProp name="HTTPSampler.postBodyRaw">true</boolProp>
+          <elementProp name="HTTPsampler.Arguments" elementType="Arguments">
+            <collectionProp name="Arguments.arguments">
+              <elementProp name="" elementType="HTTPArgument">
+                <boolProp name="HTTPArgument.always_encode">false</boolProp>
+                <stringProp name="Argument.value">{&quot;cat&quot;:&quot;phone&quot;}</stringProp>
+                <stringProp name="Argument.metadata">=</stringProp>
+              </elementProp>
+            </collectionProp>
+          </elementProp>
+        </HTTPSamplerProxy>
+        <hashTree>
+          <ResponseAssertion guiclass="AssertionGui" testclass="ResponseAssertion" testname="Status Code Assertion - 200" enabled="true">
+            <collectionProp name="Asserion.test_strings">
+              <stringProp name="49586">200</stringProp>
+            </collectionProp>
+            <stringProp name="Assertion.custom_message">Product Search did not return HTTP 200 OK under stress load (500 users).</stringProp>
+            <stringProp name="Assertion.test_field">Assertion.response_code</stringProp>
+            <boolProp name="Assertion.assume_success">false</boolProp>
+            <intProp name="Assertion.test_type">16</intProp>
+            <stringProp name="TestPlan.comments">Validates product search under 500 concurrent users.</stringProp>
+          </ResponseAssertion>
+          <hashTree/>
+          <ResponseAssertion guiclass="AssertionGui" testclass="ResponseAssertion" testname="Text Assertion - Product Items Present" enabled="true">
+            <collectionProp name="Asserion.test_strings">
+              <stringProp name="70973344">Items</stringProp>
+            </collectionProp>
+            <stringProp name="Assertion.custom_message">Product Search response does not contain &apos;Items&apos; under stress load (500 users).</stringProp>
+            <stringProp name="Assertion.test_field">Assertion.response_data</stringProp>
+            <boolProp name="Assertion.assume_success">false</boolProp>
+            <intProp name="Assertion.test_type">2</intProp>
+            <stringProp name="TestPlan.comments">Validates product Items in response under stress load of 500 users.</stringProp>
+          </ResponseAssertion>
+          <hashTree/>
+          <DurationAssertion guiclass="DurationAssertionGui" testclass="DurationAssertion" testname="Duration Assertion - 2000ms" enabled="true">
+            <stringProp name="DurationAssertion.duration">2000</stringProp>
+            <stringProp name="TestPlan.comments">Duration assertion for product search under stress load (500 users).</stringProp>
+          </DurationAssertion>
+          <hashTree/>
+          <GaussianRandomTimer guiclass="GaussianRandomTimerGui" testclass="GaussianRandomTimer" testname="Gaussian Random Timer" enabled="true">
+            <stringProp name="ConstantTimer.delay">1000</stringProp>
+            <stringProp name="RandomTimer.range">3000</stringProp>
+            <stringProp name="TestPlan.comments">Think time after product search under stress load.</stringProp>
+          </GaussianRandomTimer>
+          <hashTree/>
+          <RegexExtractor guiclass="RegexExtractorGui" testclass="RegexExtractor" testname="Regex Extractor - Product ID" enabled="true">
+            <stringProp name="RegexExtractor.useHeaders">false</stringProp>
+            <stringProp name="RegexExtractor.refname">PRODUCT_ID</stringProp>
+            <stringProp name="RegexExtractor.regex">&quot;id&quot;:([0-9]+)</stringProp>
+            <stringProp name="RegexExtractor.template">$1$</stringProp>
+            <stringProp name="RegexExtractor.default">1</stringProp>
+            <boolProp name="RegexExtractor.default_empty_value">false</boolProp>
+            <stringProp name="RegexExtractor.match_number"></stringProp>
+          </RegexExtractor>
+          <hashTree/>
+        </hashTree>
+        <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="HTTP Request (GET-ProductDetails)">
+          <stringProp name="TestPlan.comments"> Product details page for 500 concurrent users.</stringProp>
+          <stringProp name="HTTPSampler.domain">www.demoblaze.com</stringProp>
+          <stringProp name="HTTPSampler.path">/prod.html</stringProp>
+          <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
+          <stringProp name="HTTPSampler.method">GET</stringProp>
+          <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
+          <boolProp name="HTTPSampler.postBodyRaw">false</boolProp>
+          <elementProp name="HTTPsampler.Arguments" elementType="Arguments" guiclass="HTTPArgumentsPanel" testclass="Arguments" testname="User Defined Variables">
+            <collectionProp name="Arguments.arguments">
+              <elementProp name="idp_" elementType="HTTPArgument">
+                <boolProp name="HTTPArgument.always_encode">false</boolProp>
+                <stringProp name="Argument.value">1</stringProp>
+                <stringProp name="Argument.metadata">=</stringProp>
+                <boolProp name="HTTPArgument.use_equals">true</boolProp>
+                <stringProp name="Argument.name">idp_</stringProp>
+              </elementProp>
+            </collectionProp>
+          </elementProp>
+        </HTTPSamplerProxy>
+        <hashTree>
+          <ResponseAssertion guiclass="AssertionGui" testclass="ResponseAssertion" testname="Status Code Assertion - 200" enabled="true">
+            <collectionProp name="Asserion.test_strings">
+              <stringProp name="49586">200</stringProp>
+            </collectionProp>
+            <stringProp name="Assertion.custom_message">Product Details page did not return HTTP 200 OK under stress load (500 users).</stringProp>
+            <stringProp name="Assertion.test_field">Assertion.response_code</stringProp>
+            <boolProp name="Assertion.assume_success">false</boolProp>
+            <intProp name="Assertion.test_type">16</intProp>
+            <stringProp name="TestPlan.comments">Validates product details page under stress load of 500 concurrent users.</stringProp>
+          </ResponseAssertion>
+          <hashTree/>
+          <ResponseAssertion guiclass="AssertionGui" testclass="ResponseAssertion" testname="Text Assertion - Add to Cart Button Present" enabled="true">
+            <collectionProp name="Asserion.test_strings">
+              <stringProp name="-649020154">Add to cart</stringProp>
+            </collectionProp>
+            <stringProp name="Assertion.custom_message">Product Details page does not contain &apos;Add to cart&apos; under stress load (500 users).</stringProp>
+            <stringProp name="Assertion.test_field">Assertion.response_data</stringProp>
+            <boolProp name="Assertion.assume_success">false</boolProp>
+            <intProp name="Assertion.test_type">2</intProp>
+            <stringProp name="TestPlan.comments">Validates product details renders under stress load of 500 users.</stringProp>
+          </ResponseAssertion>
+          <hashTree/>
+          <DurationAssertion guiclass="DurationAssertionGui" testclass="DurationAssertion" testname="Duration Assertion - 2000ms" enabled="true">
+            <stringProp name="DurationAssertion.duration">2000</stringProp>
+            <stringProp name="TestPlan.comments">Duration assertion for product details under stress load (500 users).</stringProp>
+          </DurationAssertion>
+          <hashTree/>
+          <GaussianRandomTimer guiclass="GaussianRandomTimerGui" testclass="GaussianRandomTimer" testname="Gaussian Random Timer" enabled="true">
+            <stringProp name="ConstantTimer.delay">2000</stringProp>
+            <stringProp name="RandomTimer.range">3000</stringProp>
+            <stringProp name="TestPlan.comments">Think time on product details page under stress load.</stringProp>
+          </GaussianRandomTimer>
+          <hashTree/>
+        </hashTree>
+        <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="HTTP Request (POST-AddToCart)">
+          <stringProp name="TestPlan.comments"> Add to Cart for 500 concurrent users. At this extreme load, database write operations will experience severe contention. The error rate here compared to previous thread groups will clearly identify the write-path capacity ceiling of the application.</stringProp>
+          <stringProp name="HTTPSampler.domain">api.demoblaze.com</stringProp>
+          <stringProp name="HTTPSampler.path">/addtocart</stringProp>
+          <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
+          <stringProp name="HTTPSampler.method">POST</stringProp>
+          <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
+          <boolProp name="HTTPSampler.postBodyRaw">true</boolProp>
+          <elementProp name="HTTPsampler.Arguments" elementType="Arguments">
+            <collectionProp name="Arguments.arguments">
+              <elementProp name="" elementType="HTTPArgument">
+                <boolProp name="HTTPArgument.always_encode">false</boolProp>
+                <stringProp name="Argument.value">{&quot;id&quot;:&quot;1&quot;,&quot;cookie&quot;:&quot;Joojo Killer&quot;,&quot;prod_id&quot;:${PRODUCT_ID},&quot;flag&quot;:true}</stringProp>
+                <stringProp name="Argument.metadata">=</stringProp>
+              </elementProp>
+            </collectionProp>
+          </elementProp>
+        </HTTPSamplerProxy>
+        <hashTree>
+          <ResponseAssertion guiclass="AssertionGui" testclass="ResponseAssertion" testname="Status Code Assertion - 200">
+            <collectionProp name="Asserion.test_strings">
+              <stringProp name="49586">200</stringProp>
+            </collectionProp>
+            <stringProp name="Assertion.custom_message">Add to Cart did not return HTTP 200 OK under stress load (500 users).</stringProp>
+            <stringProp name="Assertion.test_field">Assertion.response_code</stringProp>
+            <boolProp name="Assertion.assume_success">false</boolProp>
+            <intProp name="Assertion.test_type">16</intProp>
+            <stringProp name="TestPlan.comments">Validates Add to Cart under 500 concurrent users. Expected to show elevated error rates — document the exact error rate and compare with lower load groups to determine capacity ceiling.</stringProp>
+          </ResponseAssertion>
+          <hashTree/>
+          <DurationAssertion guiclass="DurationAssertionGui" testclass="DurationAssertion" testname="Duration Assertion - 2000ms" enabled="true">
+            <stringProp name="DurationAssertion.duration">2000</stringProp>
+            <stringProp name="TestPlan.comments">Duration assertion for Add to Cart under stress load (500 users).</stringProp>
+          </DurationAssertion>
+          <hashTree/>
+          <GaussianRandomTimer guiclass="GaussianRandomTimerGui" testclass="GaussianRandomTimer" testname="Gaussian Random Timer" enabled="true">
+            <stringProp name="ConstantTimer.delay">1000</stringProp>
+            <stringProp name="RandomTimer.range">2000</stringProp>
+            <stringProp name="TestPlan.comments">Think time after add to cart under stress load.</stringProp>
+          </GaussianRandomTimer>
+          <hashTree/>
+        </hashTree>
+        <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="HTTP Request (POST-Checkout)">
+          <stringProp name="TestPlan.comments">Checkout (Place Order) for 500 concurrent users. This is beyond the stated capacity. Checkout failures here define the application&apos;s hard breaking point. Document the exact error rate, average response time, and 90th/95th percentile latency for this endpoint at 500 users; these numbers form the core of the stress test findings in the performance report.</stringProp>
+          <stringProp name="HTTPSampler.domain">api.demoblaze.com</stringProp>
+          <stringProp name="HTTPSampler.path">/send</stringProp>
+          <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
+          <stringProp name="HTTPSampler.method">POST</stringProp>
+          <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
+          <boolProp name="HTTPSampler.postBodyRaw">true</boolProp>
+          <elementProp name="HTTPsampler.Arguments" elementType="Arguments">
+            <collectionProp name="Arguments.arguments">
+              <elementProp name="" elementType="HTTPArgument">
+                <boolProp name="HTTPArgument.always_encode">false</boolProp>
+                <stringProp name="Argument.value">{&quot;cookie&quot;:&quot;Joojo Killer&quot;}</stringProp>
+                <stringProp name="Argument.metadata">=</stringProp>
+              </elementProp>
+            </collectionProp>
+          </elementProp>
+        </HTTPSamplerProxy>
+        <hashTree>
+          <ResponseAssertion guiclass="AssertionGui" testclass="ResponseAssertion" testname="Status Code Assertion - 200" enabled="true">
+            <collectionProp name="Asserion.test_strings">
+              <stringProp name="49586">200</stringProp>
+            </collectionProp>
+            <stringProp name="Assertion.custom_message">Checkout did not return HTTP 200 OK under stress load (500 users). System is beyond capacity — failures here define the application breaking point.</stringProp>
+            <stringProp name="Assertion.test_field">Assertion.response_code</stringProp>
+            <boolProp name="Assertion.assume_success">false</boolProp>
+            <intProp name="Assertion.test_type">16</intProp>
+            <stringProp name="TestPlan.comments">Validates Checkout under 500 concurrent users. This assertion is expected to fail — the failure rate quantifies the application&apos;s breaking point for the stress test report. Include the error rate, 90th/95th percentile latency, and throughput from the Aggregate Report in the final performance report findings.</stringProp>
+          </ResponseAssertion>
+          <hashTree/>
+          <DurationAssertion guiclass="DurationAssertionGui" testclass="DurationAssertion" testname="Duration Assertion - 2000ms" enabled="true">
+            <stringProp name="DurationAssertion.duration">2000</stringProp>
+            <stringProp name="TestPlan.comments">Duration assertion for Checkout under stress load (500 users). Failures here quantify the latency degradation at the breaking point.</stringProp>
+          </DurationAssertion>
+          <hashTree/>
+          <GaussianRandomTimer guiclass="GaussianRandomTimerGui" testclass="GaussianRandomTimer" testname="Gaussian Random Timer" enabled="true">
+            <stringProp name="ConstantTimer.delay">1000</stringProp>
+            <stringProp name="RandomTimer.range">2000</stringProp>
+            <stringProp name="TestPlan.comments">Think time after checkout for stress test users.</stringProp>
+          </GaussianRandomTimer>
+          <hashTree/>
+        </hashTree>
+      </hashTree>
+      <ThreadGroup guiclass="ThreadGroupGui" testclass="ThreadGroup" testname="Endurance Test">
+        <stringProp name="TestPlan.comments">Endurance test thread group. Simulates 150 concurrent users running 12 loops of the full user journey; producing a sustained, extended test run. This test replicates medium-load conditions over a long time window to detect issues that only emerge under prolonged stress: memory leaks (JVM heap growth), database connection pool degradation, session object accumulation, gradual file handle exhaustion, or caching layer saturation. The full request flow has been added to this group (it previously only contained the Homepage request). Monitor server memory usage, GC activity (if Java-based), and DB connection counts throughout the run. Compare the response times in the first 20% of the test with the last 20% ;degradation over time is the key endurance test finding. </stringProp>
+        <intProp name="ThreadGroup.num_threads">150</intProp>
+        <intProp name="ThreadGroup.ramp_time">150</intProp>
+        <boolProp name="ThreadGroup.same_user_on_next_iteration">true</boolProp>
+        <stringProp name="ThreadGroup.on_sample_error">continue</stringProp>
+        <elementProp name="ThreadGroup.main_controller" elementType="LoopController" guiclass="LoopControlPanel" testclass="LoopController" testname="Loop Controller">
+          <stringProp name="LoopController.loops">12</stringProp>
+          <boolProp name="LoopController.continue_forever">false</boolProp>
+        </elementProp>
+      </ThreadGroup>
+      <hashTree>
+        <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="HTTP Request (GET-Homepage)">
+          <stringProp name="TestPlan.comments">STEP 1 [EnduranceTest] — Homepage request running for 12 loops under 150 concurrent users. The key metric for endurance testing is response time trend over the full test duration — not the raw response time. If response times increase gradually loop over loop, it indicates resource exhaustion (memory, file handles, or connection pool depletion) developing over time.</stringProp>
+          <stringProp name="HTTPSampler.domain">www.demoblaze.com</stringProp>
+          <stringProp name="HTTPSampler.path">/index.html</stringProp>
+          <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
+          <stringProp name="HTTPSampler.method">GET</stringProp>
+          <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
+          <boolProp name="HTTPSampler.postBodyRaw">false</boolProp>
+          <elementProp name="HTTPsampler.Arguments" elementType="Arguments" guiclass="HTTPArgumentsPanel" testclass="Arguments" testname="User Defined Variables">
+            <collectionProp name="Arguments.arguments"/>
+          </elementProp>
+        </HTTPSamplerProxy>
+        <hashTree>
+          <ResponseAssertion guiclass="AssertionGui" testclass="ResponseAssertion" testname="Status Code Assertion - 200" enabled="true">
+            <collectionProp name="Asserion.test_strings">
+              <stringProp name="49586">200</stringProp>
+            </collectionProp>
+            <stringProp name="Assertion.custom_message">Homepage did not return HTTP 200 OK during endurance test. Check for resource exhaustion — this may indicate a memory leak or connection pool depletion developing over time.</stringProp>
+            <stringProp name="Assertion.test_field">Assertion.response_code</stringProp>
+            <boolProp name="Assertion.assume_success">false</boolProp>
+            <intProp name="Assertion.test_type">16</intProp>
+            <stringProp name="TestPlan.comments">Validates homepage returns HTTP 200 OK throughout all 12 loops of the endurance test. An increasing error rate over the course of the test (e.g. 0% in loop 1, 5% in loop 12) is a definitive indicator of resource degradation over time.</stringProp>
+          </ResponseAssertion>
+          <hashTree/>
+          <ResponseAssertion guiclass="AssertionGui" testclass="ResponseAssertion" testname="Text Assertion - Homepage Content" enabled="true">
+            <collectionProp name="Asserion.test_strings">
+              <stringProp name="-680176080">PRODUCT STORE</stringProp>
+            </collectionProp>
+            <stringProp name="Assertion.custom_message">Homepage response does not contain &apos;PRODUCT STORE&apos; during endurance test.</stringProp>
+            <stringProp name="Assertion.test_field">Assertion.response_data</stringProp>
+            <boolProp name="Assertion.assume_success">false</boolProp>
+            <intProp name="Assertion.test_type">2</intProp>
+            <stringProp name="TestPlan.comments">Validates homepage content across all 12 endurance loops.</stringProp>
+          </ResponseAssertion>
+          <hashTree/>
+          <DurationAssertion guiclass="DurationAssertionGui" testclass="DurationAssertion" testname="Duration Assertion - 2000ms" enabled="true">
+            <stringProp name="DurationAssertion.duration">2000</stringProp>
+            <stringProp name="TestPlan.comments">Duration assertion for homepage across all endurance loops. An upward trend in the duration violation rate over successive loops indicates gradual performance degradation under sustained load.</stringProp>
+          </DurationAssertion>
+          <hashTree/>
+          <GaussianRandomTimer guiclass="GaussianRandomTimerGui" testclass="GaussianRandomTimer" testname="Gaussian Random Timer" enabled="true">
+            <stringProp name="ConstantTimer.delay">1000</stringProp>
+            <stringProp name="RandomTimer.range">3000</stringProp>
+            <stringProp name="TestPlan.comments">Think time for endurance test users — maintained across all loops to ensure consistent, realistic simulated load throughout the extended test duration.</stringProp>
+          </GaussianRandomTimer>
+          <hashTree/>
+        </hashTree>
+        <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="HTTP Request (POST-Login)">
+          <stringProp name="TestPlan.comments">STEP 2 [EnduranceTest] — Login running across 12 loops under 150 users. Session management under prolonged load is a common source of memory leaks in web applications. Watch for increasing login response times over successive loops, which can indicate session object accumulation in server memory.</stringProp>
+          <stringProp name="HTTPSampler.domain">api.demoblaze.com</stringProp>
+          <stringProp name="HTTPSampler.protocol">https</stringProp>
+          <stringProp name="HTTPSampler.path">/login</stringProp>
+          <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
+          <stringProp name="HTTPSampler.method">POST</stringProp>
+          <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
+          <boolProp name="HTTPSampler.postBodyRaw">true</boolProp>
+          <elementProp name="HTTPsampler.Arguments" elementType="Arguments">
+            <collectionProp name="Arguments.arguments">
+              <elementProp name="" elementType="HTTPArgument">
+                <boolProp name="HTTPArgument.always_encode">false</boolProp>
+                <stringProp name="Argument.value">{&quot;username&quot;:&quot;Joojo Killer&quot;, &quot;password&quot;:&quot;123456789&quot;}</stringProp>
+                <stringProp name="Argument.metadata">=</stringProp>
+              </elementProp>
+            </collectionProp>
+          </elementProp>
+        </HTTPSamplerProxy>
+        <hashTree>
+          <ResponseAssertion guiclass="AssertionGui" testclass="ResponseAssertion" testname="Status Code Assertion - 200" enabled="true">
+            <collectionProp name="Asserion.test_strings">
+              <stringProp name="49586">200</stringProp>
+            </collectionProp>
+            <stringProp name="Assertion.custom_message">Login did not return HTTP 200 OK during endurance test. Possible session management degradation over time.</stringProp>
+            <stringProp name="Assertion.test_field">Assertion.response_code</stringProp>
+            <boolProp name="Assertion.assume_success">false</boolProp>
+            <intProp name="Assertion.test_type">16</intProp>
+            <stringProp name="TestPlan.comments">Validates login across all 12 endurance loops. Login errors appearing in later loops (not present in early loops) are a strong indicator of session store saturation or authentication service memory issues.</stringProp>
+          </ResponseAssertion>
+          <hashTree/>
+          <ResponseAssertion guiclass="AssertionGui" testclass="ResponseAssertion" testname="Text Assertion - Auth Token Present" enabled="true">
+            <collectionProp name="Asserion.test_strings">
+              <stringProp name="36698306">Auth_token</stringProp>
+            </collectionProp>
+            <stringProp name="Assertion.custom_message">Login response does not contain &apos;Auth_token&apos; during endurance test.</stringProp>
+            <stringProp name="Assertion.test_field">Assertion.response_data</stringProp>
+            <boolProp name="Assertion.assume_success">false</boolProp>
+            <intProp name="Assertion.test_type">2</intProp>
+            <stringProp name="TestPlan.comments">Validates auth token is returned across all endurance loops.</stringProp>
+          </ResponseAssertion>
+          <hashTree/>
+          <DurationAssertion guiclass="DurationAssertionGui" testclass="DurationAssertion" testname="Duration Assertion - 2000ms" enabled="true">
+            <stringProp name="DurationAssertion.duration">2000</stringProp>
+            <stringProp name="TestPlan.comments">Duration assertion for login across endurance loops. Gradual increase in login latency over successive loops is a key endurance test finding.</stringProp>
+          </DurationAssertion>
+          <hashTree/>
+          <RegexExtractor guiclass="RegexExtractorGui" testclass="RegexExtractor" testname="Regex Extractor - Auth Token" enabled="true">
+            <stringProp name="RegexExtractor.useHeaders">false</stringProp>
+            <stringProp name="RegexExtractor.refname">auth_token</stringProp>
+            <stringProp name="RegexExtractor.regex">Auth_token: (.+?)&quot;</stringProp>
+            <stringProp name="RegexExtractor.template">$1$</stringProp>
+            <stringProp name="RegexExtractor.default">NOT_FOUND</stringProp>
+            <stringProp name="RegexExtractor.match_no">1</stringProp>
+            <stringProp name="TestPlan.comments">Extracts auth token on every loop iteration across the 12 endurance loops. The token is refreshed each iteration ensuring the session remains valid throughout the extended test. Extraction failures in later loops (when earlier loops succeeded) indicate session token generation is degrading under sustained load.</stringProp>
+            <boolProp name="RegexExtractor.default_empty_value">false</boolProp>
+            <stringProp name="RegexExtractor.match_number"></stringProp>
+          </RegexExtractor>
+          <hashTree/>
+          <GaussianRandomTimer guiclass="GaussianRandomTimerGui" testclass="GaussianRandomTimer" testname="Gaussian Random Timer" enabled="true">
+            <stringProp name="ConstantTimer.delay">1000</stringProp>
+            <stringProp name="RandomTimer.range">3000</stringProp>
+            <stringProp name="TestPlan.comments">Think time after login across all endurance loops.</stringProp>
+          </GaussianRandomTimer>
+          <hashTree/>
+        </hashTree>
+        <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="HTTP Request (POST-ProductSearch)">
+          <stringProp name="TestPlan.comments">STEP 3 [EnduranceTest] — Product search running across 12 loops. Database connection pool exhaustion over time is best detected by a gradual increase in product search response times, as read queries queue behind an increasingly saturated connection pool.</stringProp>
+          <stringProp name="HTTPSampler.domain">api.demoblaze.com</stringProp>
+          <stringProp name="HTTPSampler.path">/bycat</stringProp>
+          <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
+          <stringProp name="HTTPSampler.method">POST</stringProp>
+          <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
+          <boolProp name="HTTPSampler.postBodyRaw">true</boolProp>
+          <elementProp name="HTTPsampler.Arguments" elementType="Arguments">
+            <collectionProp name="Arguments.arguments">
+              <elementProp name="" elementType="HTTPArgument">
+                <boolProp name="HTTPArgument.always_encode">false</boolProp>
+                <stringProp name="Argument.value">{&quot;cat&quot;:&quot;phone&quot;}</stringProp>
+                <stringProp name="Argument.metadata">=</stringProp>
+              </elementProp>
+            </collectionProp>
+          </elementProp>
+        </HTTPSamplerProxy>
+        <hashTree>
+          <ResponseAssertion guiclass="AssertionGui" testclass="ResponseAssertion" testname="Status Code Assertion - 200" enabled="true">
+            <collectionProp name="Asserion.test_strings">
+              <stringProp name="49586">200</stringProp>
+            </collectionProp>
+            <stringProp name="Assertion.custom_message">Product Search did not return HTTP 200 OK during endurance test.</stringProp>
+            <stringProp name="Assertion.test_field">Assertion.response_code</stringProp>
+            <boolProp name="Assertion.assume_success">false</boolProp>
+            <intProp name="Assertion.test_type">16</intProp>
+            <stringProp name="TestPlan.comments">Validates product search across all 12 endurance loops.</stringProp>
+          </ResponseAssertion>
+          <hashTree/>
+          <ResponseAssertion guiclass="AssertionGui" testclass="ResponseAssertion" testname="Text Assertion - Product Items Present" enabled="true">
+            <collectionProp name="Asserion.test_strings">
+              <stringProp name="70973344">Items</stringProp>
+            </collectionProp>
+            <stringProp name="Assertion.custom_message">Product Search response does not contain &apos;Items&apos; during endurance test.</stringProp>
+            <stringProp name="Assertion.test_field">Assertion.response_data</stringProp>
+            <boolProp name="Assertion.assume_success">false</boolProp>
+            <intProp name="Assertion.test_type">2</intProp>
+            <stringProp name="TestPlan.comments">Validates product Items in response across all endurance loops.</stringProp>
+          </ResponseAssertion>
+          <hashTree/>
+          <DurationAssertion guiclass="DurationAssertionGui" testclass="DurationAssertion" testname="Duration Assertion - 2000ms" enabled="true">
+            <stringProp name="DurationAssertion.duration">2000</stringProp>
+            <stringProp name="TestPlan.comments">Duration assertion for product search across all endurance loops.</stringProp>
+          </DurationAssertion>
+          <hashTree/>
+          <GaussianRandomTimer guiclass="GaussianRandomTimerGui" testclass="GaussianRandomTimer" testname="Gaussian Random Timer" enabled="true">
+            <stringProp name="ConstantTimer.delay">1000</stringProp>
+            <stringProp name="RandomTimer.range">3000</stringProp>
+            <stringProp name="TestPlan.comments">Think time after product search across endurance loops.</stringProp>
+          </GaussianRandomTimer>
+          <hashTree/>
+          <RegexExtractor guiclass="RegexExtractorGui" testclass="RegexExtractor" testname="Regex Extractor - Product ID" enabled="true">
+            <stringProp name="RegexExtractor.useHeaders">false</stringProp>
+            <stringProp name="RegexExtractor.refname">PRODUCT_ID</stringProp>
+            <stringProp name="RegexExtractor.regex">&quot;id&quot;:([0-9]+)</stringProp>
+            <stringProp name="RegexExtractor.template">$1$</stringProp>
+            <stringProp name="RegexExtractor.default">1</stringProp>
+            <boolProp name="RegexExtractor.default_empty_value">false</boolProp>
+            <stringProp name="RegexExtractor.match_number"></stringProp>
+          </RegexExtractor>
+          <hashTree/>
+        </hashTree>
+        <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="HTTP Request (GET-ProductDetails)">
+          <stringProp name="TestPlan.comments">STEP 4 [EnduranceTest] — Product details page across 12 loops.</stringProp>
+          <stringProp name="HTTPSampler.domain">www.demoblaze.com</stringProp>
+          <stringProp name="HTTPSampler.path">/prod.html</stringProp>
+          <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
+          <stringProp name="HTTPSampler.method">GET</stringProp>
+          <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
+          <boolProp name="HTTPSampler.postBodyRaw">false</boolProp>
+          <elementProp name="HTTPsampler.Arguments" elementType="Arguments" guiclass="HTTPArgumentsPanel" testclass="Arguments" testname="User Defined Variables">
+            <collectionProp name="Arguments.arguments">
+              <elementProp name="idp_" elementType="HTTPArgument">
+                <boolProp name="HTTPArgument.always_encode">false</boolProp>
+                <stringProp name="Argument.value">1</stringProp>
+                <stringProp name="Argument.metadata">=</stringProp>
+                <boolProp name="HTTPArgument.use_equals">true</boolProp>
+                <stringProp name="Argument.name">idp_</stringProp>
+              </elementProp>
+            </collectionProp>
+          </elementProp>
+        </HTTPSamplerProxy>
+        <hashTree>
+          <ResponseAssertion guiclass="AssertionGui" testclass="ResponseAssertion" testname="Status Code Assertion - 200" enabled="true">
+            <collectionProp name="Asserion.test_strings">
+              <stringProp name="49586">200</stringProp>
+            </collectionProp>
+            <stringProp name="Assertion.custom_message">Product Details page did not return HTTP 200 OK during endurance test.</stringProp>
+            <stringProp name="Assertion.test_field">Assertion.response_code</stringProp>
+            <boolProp name="Assertion.assume_success">false</boolProp>
+            <intProp name="Assertion.test_type">16</intProp>
+            <stringProp name="TestPlan.comments">Validates product details page across all 12 endurance loops.</stringProp>
+          </ResponseAssertion>
+          <hashTree/>
+          <ResponseAssertion guiclass="AssertionGui" testclass="ResponseAssertion" testname="Text Assertion - Add to Cart Button Present" enabled="true">
+            <collectionProp name="Asserion.test_strings">
+              <stringProp name="-649020154">Add to cart</stringProp>
+            </collectionProp>
+            <stringProp name="Assertion.custom_message">Product Details page does not contain &apos;Add to cart&apos; during endurance test.</stringProp>
+            <stringProp name="Assertion.test_field">Assertion.response_data</stringProp>
+            <boolProp name="Assertion.assume_success">false</boolProp>
+            <intProp name="Assertion.test_type">2</intProp>
+            <stringProp name="TestPlan.comments">Validates product details page renders correctly across all endurance loops.</stringProp>
+          </ResponseAssertion>
+          <hashTree/>
+          <DurationAssertion guiclass="DurationAssertionGui" testclass="DurationAssertion" testname="Duration Assertion - 2000ms" enabled="true">
+            <stringProp name="DurationAssertion.duration">2000</stringProp>
+            <stringProp name="TestPlan.comments">Duration assertion for product details page across all endurance loops.</stringProp>
+          </DurationAssertion>
+          <hashTree/>
+          <GaussianRandomTimer guiclass="GaussianRandomTimerGui" testclass="GaussianRandomTimer" testname="Gaussian Random Timer" enabled="true">
+            <stringProp name="ConstantTimer.delay">2000</stringProp>
+            <stringProp name="RandomTimer.range">3000</stringProp>
+            <stringProp name="TestPlan.comments">Think time on product details page across endurance loops.</stringProp>
+          </GaussianRandomTimer>
+          <hashTree/>
+        </hashTree>
+        <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="HTTP Request (POST-AddToCart)">
+          <stringProp name="TestPlan.comments">STEP 5 [EnduranceTest] — Add to Cart running across 12 loops. Repeated cart write operations over an extended period accumulate data in the cart database table. Monitor whether response times increase over successive loops as the cart table grows — this indicates missing database maintenance (e.g. auto-vacuum, index bloat) that only becomes visible under sustained write load.</stringProp>
+          <stringProp name="HTTPSampler.domain">api.demoblaze.com</stringProp>
+          <stringProp name="HTTPSampler.path">/addtocart</stringProp>
+          <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
+          <stringProp name="HTTPSampler.method">POST</stringProp>
+          <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
+          <boolProp name="HTTPSampler.postBodyRaw">true</boolProp>
+          <elementProp name="HTTPsampler.Arguments" elementType="Arguments">
+            <collectionProp name="Arguments.arguments">
+              <elementProp name="" elementType="HTTPArgument">
+                <boolProp name="HTTPArgument.always_encode">false</boolProp>
+                <stringProp name="Argument.value">{&quot;id&quot;:&quot;1&quot;,&quot;cookie&quot;:&quot;Joojo Killer&quot;,&quot;prod_id&quot;:${PRODUCT_ID},&quot;flag&quot;:true}</stringProp>
+                <stringProp name="Argument.metadata">=</stringProp>
+              </elementProp>
+            </collectionProp>
+          </elementProp>
+        </HTTPSamplerProxy>
+        <hashTree>
+          <ResponseAssertion guiclass="AssertionGui" testclass="ResponseAssertion" testname="Status Code Assertion - 200" enabled="true">
+            <collectionProp name="Asserion.test_strings">
+              <stringProp name="49586">200</stringProp>
+            </collectionProp>
+            <stringProp name="Assertion.custom_message">Add to Cart did not return HTTP 200 OK during endurance test. Database write degradation over time detected.</stringProp>
+            <stringProp name="Assertion.test_field">Assertion.response_code</stringProp>
+            <boolProp name="Assertion.assume_success">false</boolProp>
+            <intProp name="Assertion.test_type">16</intProp>
+            <stringProp name="TestPlan.comments">Validates Add to Cart across all 12 endurance loops.</stringProp>
+          </ResponseAssertion>
+          <hashTree/>
+          <DurationAssertion guiclass="DurationAssertionGui" testclass="DurationAssertion" testname="Duration Assertion - 2000ms" enabled="true">
+            <stringProp name="DurationAssertion.duration">2000</stringProp>
+            <stringProp name="TestPlan.comments">Duration assertion for Add to Cart across all endurance loops. Upward trend in violations over successive loops indicates database write path degradation under sustained load.</stringProp>
+          </DurationAssertion>
+          <hashTree/>
+          <GaussianRandomTimer guiclass="GaussianRandomTimerGui" testclass="GaussianRandomTimer" testname="Gaussian Random Timer" enabled="true">
+            <stringProp name="ConstantTimer.delay">1000</stringProp>
+            <stringProp name="RandomTimer.range">2000</stringProp>
+            <stringProp name="TestPlan.comments">Think time after add to cart across endurance loops.</stringProp>
+          </GaussianRandomTimer>
+          <hashTree/>
+        </hashTree>
+        <HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="HTTP Request (POST-Checkout)">
+          <stringProp name="TestPlan.comments">STEP 6 [EnduranceTest] — Checkout (Place Order) running across 12 loops under sustained 150-user load. This is the most critical endurance metric: does checkout response time remain stable throughout all loops, or does it gradually increase? A checkout latency trend that increases over the course of the endurance test is definitive evidence of a reliability issue that would impact real users during extended high-traffic periods (e.g. sales events, flash deals). Compare the average checkout response time in the first 3 loops versus the last 3 loops in the HTML Dashboard report.</stringProp>
+          <stringProp name="HTTPSampler.domain">api.demoblaze.com</stringProp>
+          <stringProp name="HTTPSampler.path">/send</stringProp>
+          <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
+          <stringProp name="HTTPSampler.method">POST</stringProp>
+          <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
+          <boolProp name="HTTPSampler.postBodyRaw">true</boolProp>
+          <elementProp name="HTTPsampler.Arguments" elementType="Arguments">
+            <collectionProp name="Arguments.arguments">
+              <elementProp name="" elementType="HTTPArgument">
+                <boolProp name="HTTPArgument.always_encode">false</boolProp>
+                <stringProp name="Argument.value">{&quot;cookie&quot;:&quot;Joojo Killer&quot;}</stringProp>
+                <stringProp name="Argument.metadata">=</stringProp>
+              </elementProp>
+            </collectionProp>
+          </elementProp>
+        </HTTPSamplerProxy>
+        <hashTree>
+          <ResponseAssertion guiclass="AssertionGui" testclass="ResponseAssertion" testname="Status Code Assertion - 200">
+            <collectionProp name="Asserion.test_strings">
+              <stringProp name="49586">200</stringProp>
+            </collectionProp>
+            <stringProp name="Assertion.custom_message">Checkout did not return HTTP 200 OK during endurance test. Order placement reliability is degrading over time — a critical endurance finding indicating a resource leak or accumulating database pressure.</stringProp>
+            <stringProp name="Assertion.test_field">Assertion.response_code</stringProp>
+            <boolProp name="Assertion.assume_success">false</boolProp>
+            <intProp name="Assertion.test_type">16</intProp>
+            <stringProp name="TestPlan.comments">Validates Checkout across all 12 endurance loops. Checkout errors appearing in later loops (not present early in the test) are the most serious endurance test finding — they indicate the application cannot sustain reliable order processing under prolonged load, which has direct revenue impact.</stringProp>
+          </ResponseAssertion>
+          <hashTree/>
+          <DurationAssertion guiclass="DurationAssertionGui" testclass="DurationAssertion" testname="Duration Assertion - 2000ms" enabled="true">
+            <stringProp name="DurationAssertion.duration">2000</stringProp>
+            <stringProp name="TestPlan.comments">Duration assertion for Checkout across all endurance loops. A gradual upward trend in checkout duration violations across loops is the primary endurance test failure indicator. Quantify the difference between first-loop and last-loop average response times and include this trend in the endurance test section of the performance report.</stringProp>
+          </DurationAssertion>
+          <hashTree/>
+          <GaussianRandomTimer guiclass="GaussianRandomTimerGui" testclass="GaussianRandomTimer" testname="Gaussian Random Timer" enabled="true">
+            <stringProp name="ConstantTimer.delay">1000</stringProp>
+            <stringProp name="RandomTimer.range">2000</stringProp>
+            <stringProp name="TestPlan.comments">Think time after checkout across endurance loops. User reads order confirmation before starting the next loop iteration.</stringProp>
+          </GaussianRandomTimer>
+          <hashTree/>
+        </hashTree>
+      </hashTree>
+    </hashTree>
+  </hashTree>
+</jmeterTestPlan>
