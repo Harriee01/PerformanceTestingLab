@@ -12,21 +12,29 @@ on:
     - cron: "0 2 * * *"        # Run nightly at 2:00 AM UTC
   workflow_dispatch:            # Allow manual trigger from GitHub UI
 
-# ─────────────────────────────────────────────
-# GLOBAL ENV VARIABLES
-# ─────────────────────────────────────────────
-env:
-  JMETER_VERSION: "5.6.3"
-  JAVA_VERSION: "17"
-  TEST_PLAN: "Test_Plan_Updated.jmx"
-  RESULTS_DIR: "results"
-  REPORT_DIR: "results/html_report"
-  JTL_FILE: "results/results.jtl"
+permissions:
+  contents: read
+  pages: write
+  id-token: write
 
 jobs:
   performance-test:
-    name: Run JMeter Performance Tests
+    name: Run JMeter Performance Tests (${{ matrix.load }})
     runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        load: [light, medium, peak]
+
+    env:
+      JMETER_VERSION: "5.6.3"
+      JAVA_VERSION: "17"
+      TEST_PLAN: "Test_Plan_Updated.jmx"
+      THREAD_GROUP: ${{ matrix.load == 'light' && 'LightLoad Test' || matrix.load == 'medium' && 'MediumLoad Test' || 'PeakLoad Test' }}
+      RESULTS_DIR: results/${{ matrix.load }}
+      REPORT_DIR: results/${{ matrix.load }}/html_report
+      JTL_FILE: results/${{ matrix.load }}/results.jtl
+      LOAD: ${{ matrix.load }}
 
     steps:
 
@@ -82,8 +90,7 @@ jobs:
           rm -rf ${{ env.REPORT_DIR }}
 
       # ─────────────────────────────────────────
-      # STEP 7 — Run JMeter Tests (LightLoad only
-      # in CI; heavier loads run on schedule only)
+      # STEP 7 — Run JMeter Performance Test for ${{ matrix.load }} load
       # ─────────────────────────────────────────
       - name: Run JMeter Performance Test
         id: run_tests
@@ -94,6 +101,7 @@ jobs:
             -l ${{ env.JTL_FILE }} \
             -e \
             -o ${{ env.REPORT_DIR }} \
+            -J${{ env.THREAD_GROUP }}.enabled=true \
             -Jjmeter.save.saveservice.output_format=csv \
             -j ${{ env.RESULTS_DIR }}/jmeter.log
         continue-on-error: true   # Don't stop — we still want the report even if tests fail
@@ -132,6 +140,7 @@ jobs:
           status    = os.environ.get("TEST_STATUS", "UNKNOWN")
           color     = os.environ.get("STATUS_COLOR", "#888888")
           emoji     = os.environ.get("STATUS_EMOJI", "⚪")
+          load      = os.environ.get("LOAD", "unknown")
           repo      = os.environ.get("GITHUB_REPOSITORY", "unknown/repo")
           run_id    = os.environ.get("GITHUB_RUN_ID", "0")
           run_num   = os.environ.get("GITHUB_RUN_NUMBER", "0")
@@ -240,7 +249,7 @@ jobs:
                               "type": "header",
                               "text": {
                                   "type": "plain_text",
-                                  "text": f"{emoji} JMeter Performance Test — {status}",
+                                  "text": f"{emoji} JMeter Performance Test — {status} ({load})",
                                   "emoji": True
                               }
                           },
@@ -336,6 +345,7 @@ jobs:
           TEST_STATUS: ${{ steps.test_status.outputs.status }}
           STATUS_COLOR: ${{ steps.test_status.outputs.status_color }}
           STATUS_EMOJI: ${{ steps.test_status.outputs.status_emoji }}
+          LOAD: ${{ env.LOAD }}
 
       # ─────────────────────────────────────────
       # STEP 10 — Send Slack Notification
@@ -359,7 +369,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: jmeter-html-report-${{ github.run_number }}
+          name: jmeter-html-report-${{ matrix.load }}-${{ github.run_number }}
           path: ${{ env.REPORT_DIR }}
           retention-days: 30
 
@@ -370,7 +380,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: jmeter-jtl-${{ github.run_number }}
+          name: jmeter-jtl-${{ matrix.load }}-${{ github.run_number }}
           path: ${{ env.JTL_FILE }}
           retention-days: 30
 
@@ -381,7 +391,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: jmeter-log-${{ github.run_number }}
+          name: jmeter-log-${{ matrix.load }}-${{ github.run_number }}
           path: ${{ env.RESULTS_DIR }}/jmeter.log
           retention-days: 14
 
@@ -395,3 +405,35 @@ jobs:
         run: |
           echo "❌ Performance tests failed. Check the HTML report artifact for details."
           exit 1
+
+  deploy-pages:
+    name: Deploy to GitHub Pages
+    runs-on: ubuntu-latest
+    needs: performance-test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download reports
+        uses: actions/download-artifact@v4
+        with:
+          path: reports
+
+      - name: Create index
+        run: |
+          cd reports
+          echo '<html><head><title>Performance Test Reports</title></head><body><h1>Performance Test Reports</h1><ul>' > index.html
+          for dir in */; do
+            if [ -d "$dir" ] && [ -f "$dir/index.html" ]; then
+              load_name=$(basename "$dir")
+              echo "<li><a href=\"$dir/index.html\">$load_name Load Report</a></li>" >> index.html
+            fi
+          done
+          echo '</ul></body></html>' >> index.html
+
+      - name: Deploy to GitHub Pages
+        uses: actions/deploy-pages@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          path: reports
