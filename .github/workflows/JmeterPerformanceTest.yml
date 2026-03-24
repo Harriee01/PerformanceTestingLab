@@ -420,30 +420,85 @@ jobs:
         with:
           path: reports
 
-      - name: Copy reports without symlinks
+      - name: Cleanup and prepare reports
         run: |
-          mkdir reports_clean
-          cp -rL reports/* reports_clean/ 2>/dev/null || true
-          rm -rf reports
-          mv reports_clean reports
-
-      - name: Create index
-        run: |
-          cd reports
-          echo '<html><head><title>Performance Test Reports</title></head><body><h1>Performance Test Reports</h1><ul>' > index.html
-          for dir in */; do
-            if [ -d "$dir" ] && [ -f "$dir/index.html" ]; then
-              load_name=$(basename "$dir")
-              echo "<li><a href=\"$dir/index.html\">$load_name Load Report</a></li>" >> index.html
+          # Remove any symlinks and create clean structure
+          find reports -type l -delete
+          
+          # Create clean directory structure
+          mkdir -p pages_content
+          
+          # Copy only index.html and assets from each report, exclude large data files
+          for report_dir in reports/jmeter-html-report-*; do
+            if [ -d "$report_dir" ]; then
+              load_type=$(basename "$report_dir" | sed 's/jmeter-html-report-//g' | sed 's/-[0-9]*$//g')
+              mkdir -p "pages_content/$load_type"
+              
+              # Copy index.html and essential files only
+              if [ -f "$report_dir/index.html" ]; then
+                cp "$report_dir/index.html" "pages_content/$load_type/"
+              fi
+              
+              # Copy js and css directories (usually small)
+              [ -d "$report_dir/js" ] && cp -rL "$report_dir/js" "pages_content/$load_type/" || true
+              [ -d "$report_dir/css" ] && cp -rL "$report_dir/css" "pages_content/$load_type/" || true
+              [ -d "$report_dir/img" ] && cp -rL "$report_dir/img" "pages_content/$load_type/" || true
             fi
           done
-          echo '</ul></body></html>' >> index.html
+
+      - name: Create main index
+        run: |
+          cat > pages_content/index.html << 'HTMLEOF'
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <title>Performance Test Reports</title>
+            <style>
+              body { font-family: Arial, sans-serif; margin: 20px; background-color: #f5f5f5; }
+              h1 { color: #333; }
+              ul { list-style-type: none; padding: 0; }
+              li { margin: 10px 0; }
+              a { display: inline-block; padding: 10px 20px; background-color: #0066cc; color: white; text-decoration: none; border-radius: 5px; }
+              a:hover { background-color: #0052a3; }
+              .load-type { font-weight: bold; color: #666; margin-top: 15px; }
+            </style>
+          </head>
+          <body>
+            <h1>📊 JMeter Performance Test Reports</h1>
+            <p>Click on any load type to view the detailed performance test report.</p>
+            <ul>
+              <li class="load-type">🟢 Light Load</li>
+              <li><a href="light/index.html">View Report</a></li>
+              
+              <li class="load-type">🟡 Medium Load</li>
+              <li><a href="medium/index.html">View Report</a></li>
+              
+              <li class="load-type">🔴 Peak Load</li>
+              <li><a href="peak/index.html">View Report</a></li>
+              
+              <li class="load-type">⚫ Stress Load</li>
+              <li><a href="stress/index.html">View Report</a></li>
+              
+              <li class="load-type">🔥 Endurance Load</li>
+              <li><a href="endurance/index.html">View Report</a></li>
+            </ul>
+          </body>
+          </html>
+          HTMLEOF
+
+      - name: Verify content and check size
+        run: |
+          echo "=== Directory structure ==="
+          du -sh pages_content/
+          find pages_content -type l -exec echo "ERROR: Found symlink: {}" \;
+          echo "=== Total files ==="
+          find pages_content -type f | wc -l
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: github-pages
-          path: reports
+          path: pages_content
 
       - name: Deploy to GitHub Pages
         uses: actions/deploy-pages@v4
