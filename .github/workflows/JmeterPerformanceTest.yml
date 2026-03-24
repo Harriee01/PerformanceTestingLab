@@ -24,13 +24,13 @@ jobs:
 
     strategy:
       matrix:
-        load: [light, medium, peak]
+        load: [light, medium, peak, stress, endurance]
 
     env:
       JMETER_VERSION: "5.6.3"
       JAVA_VERSION: "17"
       TEST_PLAN: "Test_Plan_Updated.jmx"
-      THREAD_GROUP: ${{ matrix.load == 'light' && 'LightLoad Test' || matrix.load == 'medium' && 'MediumLoad Test' || 'PeakLoad Test' }}
+      THREAD_GROUP: ${{ matrix.load == 'light' && 'LightLoad Test' || matrix.load == 'medium' && 'MediumLoad Test' || matrix.load == 'peak' && 'PeakLoad Test' || matrix.load == 'stress' && 'StressLoad Test' || 'EnduranceLoad Test' }}
       RESULTS_DIR: results/${{ matrix.load }}
       REPORT_DIR: results/${{ matrix.load }}/html_report
       JTL_FILE: results/${{ matrix.load }}/results.jtl
@@ -419,6 +419,13 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: reports
+
+      - name: Copy reports without symlinks
+        run: |
+          mkdir reports_clean
+          cp -rL reports/* reports_clean/ 2>/dev/null || true
+          rm -rf reports
+          mv reports_clean reports
 
       - name: Create index
         run: |
