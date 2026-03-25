@@ -411,41 +411,76 @@ jobs:
     runs-on: ubuntu-latest
     needs: performance-test
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # ─────────────────────────────────────────
+      # Download all artifacts from this run
+      # ─────────────────────────────────────────
       - name: Download reports
         uses: actions/download-artifact@v4
         with:
           path: reports
 
+      # ─────────────────────────────────────────
+      # FIX: Use rsync -L to dereference all
+      # symlinks during copy, then explicitly
+      # break any hard links (nlink > 1) by
+      # rewriting each file through a temp file
+      # so every file gets a fresh inode.
+      # GitHub Pages rejects artifacts that
+      # contain symlinks OR hard links.
+      # ─────────────────────────────────────────
       - name: Cleanup and prepare reports
         run: |
-          # Remove any symlinks and create clean structure
-          find reports -type l -delete
-          
-          # Create clean directory structure
+          # Install rsync (available by default on ubuntu-latest, but be safe)
+          which rsync || sudo apt-get install -y rsync
+
           mkdir -p pages_content
-          
-          # Copy only index.html and assets from each report, exclude large data files
+
           for report_dir in reports/jmeter-html-report-*; do
             if [ -d "$report_dir" ]; then
               load_type=$(basename "$report_dir" | sed 's/jmeter-html-report-//g' | sed 's/-[0-9]*$//g')
               mkdir -p "pages_content/$load_type"
-              
-              # Copy index.html and essential files only
-              if [ -f "$report_dir/index.html" ]; then
-                cp "$report_dir/index.html" "pages_content/$load_type/"
-              fi
-              
-              # Copy js and css directories (usually small)
-              [ -d "$report_dir/js" ] && cp -rL "$report_dir/js" "pages_content/$load_type/" || true
-              [ -d "$report_dir/css" ] && cp -rL "$report_dir/css" "pages_content/$load_type/" || true
-              [ -d "$report_dir/img" ] && cp -rL "$report_dir/img" "pages_content/$load_type/" || true
+
+              # rsync flags:
+              #   -a            preserve permissions/timestamps
+              #   -L            dereference symlinks (copy the target file, not the link)
+              #   --safe-links  silently skip symlinks that point outside the tree
+              #   --exclude     skip large raw data files to stay well under 10 GB
+              rsync -a -L --safe-links \
+                --exclude="*.jtl" \
+                --exclude="*.csv" \
+                --exclude="*.gz" \
+                "$report_dir/" "pages_content/$load_type/" 2>/dev/null || true
             fi
           done
 
+          # ── Break hard links ──────────────────────────────────────────────
+          # A file with nlink > 1 shares its inode with another file.
+          # GitHub Pages rejects these. Fix: stream bytes into a brand-new
+          # temp file in the same directory (guarantees same filesystem →
+          # rename is atomic), then replace the original with the temp file.
+          find pages_content -type f -links +1 | while IFS= read -r f; do
+            tmp=$(mktemp -p "$(dirname "$f")" .hardlink_fix_XXXXXX)
+            cat "$f" > "$tmp"
+            chmod --reference="$f" "$tmp"
+            mv -f "$tmp" "$f"
+          done
+
+          # ── Remove any remaining symlinks (belt-and-suspenders) ───────────
+          find pages_content -type l -delete 2>/dev/null || true
+
+      # ─────────────────────────────────────────
+      # Create the main landing page that links
+      # to each load-type report
+      # ─────────────────────────────────────────
       - name: Create main index
         run: |
           cat > pages_content/index.html << 'HTMLEOF'
@@ -469,16 +504,16 @@ jobs:
             <ul>
               <li class="load-type">🟢 Light Load</li>
               <li><a href="light/index.html">View Report</a></li>
-              
+
               <li class="load-type">🟡 Medium Load</li>
               <li><a href="medium/index.html">View Report</a></li>
-              
+
               <li class="load-type">🔴 Peak Load</li>
               <li><a href="peak/index.html">View Report</a></li>
-              
+
               <li class="load-type">⚫ Stress Load</li>
               <li><a href="stress/index.html">View Report</a></li>
-              
+
               <li class="load-type">🔥 Endurance Load</li>
               <li><a href="endurance/index.html">View Report</a></li>
             </ul>
@@ -486,21 +521,60 @@ jobs:
           </html>
           HTMLEOF
 
-      - name: Verify content and check size
+      # ─────────────────────────────────────────
+      # Verify the content is clean before upload
+      # Fails fast if any symlinks or hard links
+      # are still present
+      # ─────────────────────────────────────────
+      - name: Verify content — no symlinks or hard links
         run: |
-          echo "=== Directory structure ==="
+          echo "=== Directory size ==="
           du -sh pages_content/
-          find pages_content -type l -exec echo "ERROR: Found symlink: {}" \;
+
+          echo ""
+          echo "=== Checking for symlinks ==="
+          SYMLINKS=$(find pages_content -type l 2>/dev/null)
+          if [ -n "$SYMLINKS" ]; then
+            echo "❌ ERROR: Symlinks still present:"
+            echo "$SYMLINKS"
+            exit 1
+          else
+            echo "✅ No symlinks found"
+          fi
+
+          echo ""
+          echo "=== Checking for hard links ==="
+          HARDLINKS=$(find pages_content -type f -links +1 2>/dev/null)
+          if [ -n "$HARDLINKS" ]; then
+            echo "❌ ERROR: Hard links still present:"
+            echo "$HARDLINKS"
+            exit 1
+          else
+            echo "✅ No hard links found"
+          fi
+
+          echo ""
           echo "=== Total files ==="
           find pages_content -type f | wc -l
 
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
+          echo ""
+          echo "=== File list (first 50) ==="
+          find pages_content -type f | head -50
+
+      # ─────────────────────────────────────────
+      # Upload the clean directory as the
+      # github-pages artifact for deployment
+      # ─────────────────────────────────────────
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
         with:
-          name: github-pages
           path: pages_content
 
+      # ─────────────────────────────────────────
+      # Deploy to GitHub Pages
+      # ─────────────────────────────────────────
       - name: Deploy to GitHub Pages
+        id: deployment
         uses: actions/deploy-pages@v4
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
